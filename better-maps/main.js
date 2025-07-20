@@ -218,19 +218,10 @@
             let totalCurrVotes = 0;
             let totalVotes = 0;
 
-            let caucusNum = {
-                D: 0,
-                R: 0
-            };
-
             const newCounty = {
                 name: origCounty.name,
                 cands: origCounty.cands.map(candObj => {
                     const newCandObj = Object.assign({}, candObj);
-
-                    /* We want to count how many candidates there are for each caucus for map colouring. */
-                    newCandObj.caucusCandNum = caucusNum[candObj.caucus];
-                    caucusNum[candObj.caucus]++;
 
                     if(!live){
                         newCandObj.currentVotes = newCandObj.votes;
@@ -280,15 +271,7 @@
         newCounties.forEach(county => {
             raceInfo = raceInfoCache[county.name];
 
-            let baseColour = getCandidateColour(raceInfo.currentLeader);
-
-            /* If the candidate isn't the first candidate from their caucus, pick a different colour from the config
-               for them. */
-            if(raceInfo.currentLeader.caucusCandNum !== 0){
-                const colourIndex = (raceInfo.currentLeader.caucusCandNum - 1) % config.alternateCaucusCountyColours[raceInfo.currentLeader.caucus].length;
-                baseColour = config.alternateCaucusCountyColours[raceInfo.currentLeader.caucus][colourIndex];
-            }
-
+            const baseColour = getCandidateColour(raceInfo.currentLeader);
             const scaleNum = (raceInfo.currentMajority !== 1) ? majorityScale(raceInfo.currentMajority)
                 : majorityScale(d3.max(majorities));
             const inverseLightness = (100 - baseColour.l) * scaleNum;
@@ -507,12 +490,6 @@
                 svgMap.setAttribute("data-type", electionType);
                 svgMap.setAttribute("data-source", mapPath);
 
-                /* If the property is enabled, use the user-defined map background in the config. */
-                if(config.mapBackground){
-                    const currentColour = config.mapBackgroundColours[Executive.styles.currentTheme];
-                    svgMap.setAttribute("style", `background: hsl(${currentColour.h}, ${currentColour.s}%, ${currentColour.l}%)`);
-                }
-
                 containerDiv.appendChild(svgMap);
                 container.insertBefore(containerDiv, canvasElem);
 
@@ -529,7 +506,7 @@
 
                     statePaths[i].setAttribute("id", stateId.toLowerCase() + "-state-path" + (live ? "-live" : ""));
                     statePaths[i].setAttribute("class", "better-maps-state-path");
-                    statePaths[i].setAttribute("style", `fill: #cccccc; ${config.mapBorders ? "stroke: hsl(0, 0%, 20%); stroke-width: 0.75px" : ""}`);
+                    statePaths[i].setAttribute("style", "fill: #cccccc;");
 
                     if(!onCountyMap){
                         statePaths[i].addEventListener("click", (event) => {
@@ -774,20 +751,6 @@
             Executive.functions.registerPostHook("senateElectPage", addPartyID);
             Executive.functions.registerPostHook("governorElectPage", addPartyID);
         }
-
-        /* If custom map backgrounds are enabled, we want to change the background of the map container whenever
-           the player changes the selected theme. */
-        Executive.styles.onThemeChange.registerListener((eventObj, darkMode) => {
-            if(config.mapBackground){
-                const currentColour = config.mapBackgroundColours[Executive.styles.currentTheme];
-                const currentContainers = document.getElementsByClassName("better-maps-container");
-
-                for(let i = 0; i < currentContainers.length; i++){
-                    currentContainers[i].setAttribute("style",
-                        `background: hsl(${currentColour.h}, ${currentColour.s}%, ${currentColour.l}%)`);
-                }
-            }
-        });
     };
 
     module.exports = mod;
