@@ -1,7 +1,7 @@
 {
     "partyColours": {
-        "D": {"h": 210, "s": 53.4, "l": 45.5},
-        "R": {"h": 1, "s": 51, "l": 48},
+        "D": {"h": 205, "s": 82, "l": 46},
+        "R": {"h": 0, "s": 73, "l": 51},
         "I": {
             "D": {"h": 210, "s": 50.7, "l": 71.4},
             "R": {"h": 2, "s": 47.2, "l": 68.0},
@@ -9,26 +9,6 @@
         },
         "HouseTie": {"h": 0, "s": 0, "l": 90}
     },
-
     "showPanePartyID": true,
-    "useRelativeColourScale": false,
-
-    "mapBackground": true,
-    "mapBackgroundColours": {
-        "dark": {"h": 0, "s": 0, "l": 20},
-        "light": {"h": 0, "s": 0, "l": 95}
-    },
-
-    "mapBorders": false,
-
-    "alternateCaucusCountyColours": {
-        "D": [
-            {"h": 300, "s": 37, "l": 43},
-            {"h": 120, "s": 37, "l": 43}
-        ],
-        "R": [
-            {"h": 48, "s": 61, "l": 55},
-            {"h": 24, "s": 61, "l": 55}
-        ]
-    }
+    "useRelativeColourScale": false
 }
