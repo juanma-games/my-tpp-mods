@@ -11,6 +11,10 @@ Go to "better-maps" and copy the files: tooltip.js, main.js and config.json.
 
 In "better-maps" -> "styles" copy the file general.css
 
+Remember to download the "Oswald" font at this link: https://fonts.google.com/specimen/Oswald
+
+Once you have downloaded the. zip file, unzip it and paste it into the styles folder.
+
 # Xoraurea's Mods for The Political Process
 
 Here are the mods I've written for The Political Process. The mods in this repository require the installation of the Executive mod loader – if you don't have it installed, grab it [here](https://github.com/Xoraurea/tpp-executive) before continuing. All three mods are fully independent of each other, and can be mixed and matched.
