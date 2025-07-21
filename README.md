@@ -1,3 +1,16 @@
+# Mod Juanma
+The first thing you will have to do is download the base mod created and download it at this link: https://github.com/Xoraurea/my-tpp-mods
+
+Once you have it installed and you have checked that it works, you can include my files to make a small change of the mod.
+
+Go to the following link: https://github.com/juanma-games/my-tpp-mods.
+
+Once inside the github website you will see the same basic mod but with different files that you will have to change.
+
+Go to "better-maps" and copy the files: tooltip.js, main.js and config.json.
+
+In "better-maps" -> "styles" copy the file general.css
+
 # Xoraurea's Mods for The Political Process
 
 Here are the mods I've written for The Political Process. The mods in this repository require the installation of the Executive mod loader – if you don't have it installed, grab it [here](https://github.com/Xoraurea/tpp-executive) before continuing. All three mods are fully independent of each other, and can be mixed and matched.
