@@ -1,0 +1,14 @@
+{
+    "partyColours": {
+        "D": {"h": 205, "s": 82, "l": 46},
+        "R": {"h": 0, "s": 73, "l": 51},
+        "I": {
+            "D": {"h": 210, "s": 50.7, "l": 71.4},
+            "R": {"h": 2, "s": 47.2, "l": 68.0},
+            "default": {"h": 0, "s": 0, "l": 80}
+        },
+        "HouseTie": {"h": 0, "s": 2, "l": 78}
+    },
+    "showPanePartyID": true,
+    "useRelativeColourScale": false
+}

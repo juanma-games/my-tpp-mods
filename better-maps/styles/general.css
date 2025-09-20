@@ -1,0 +1,552 @@
+/* Better Election Maps - better-maps/styles/general.css
+   General styling for UI elements */
+
+/* Define the custom font. */
+@font-face {
+    font-family: "Oswald";
+    src: url("plex-sans/oswald-light.woff2") format("woff2");
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Oswald";
+    src: url("plex-sans/oswald-light.woff2") format("woff2");
+    font-weight: normal;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: "Oswald";
+    src: url("plex-sans/oswald-regular.woff2") format("woff2");
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Oswald";
+    src: url("plex-sans/oswald-regular.woff2") format("woff2");
+    font-weight: bold;
+    font-style: italic;
+}
+
+/* UI elements. */
+
+.better-maps-container {
+    margin-left: 4px;
+    margin-right: 4px;
+    border: 1px solid hsl(0, 0%, 10%);
+    border-radius: 5px;
+    z-index: 2;
+}
+
+#eSimMapDivRel .better-maps-container,
+#eSimMapDiv .better-maps-container {
+    float: left;
+    margin: 10px;
+    border-color: hsl(0, 0%, 20%);
+    border-radius: 10px;
+}
+
+#polProfInnerContent .better-maps-container {
+    border-color: hsl(0, 0%, 20%);
+}
+
+#better-maps-tooltip {
+    z-index: 4;
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid hsl(0, 0%, 15%);
+    border-radius: px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    min-width: 300px;
+    padding-bottom: 5px;
+    font-family: "Oswald", Georgia, Courier New, monospace;
+}
+
+#better-maps-tooltip-win-line {
+    width: 100%;
+    height: 10px;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    background: #cccccc;
+}
+
+#better-maps-tooltip hr {
+    width: calc(100% - 20px);
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+#better-maps-tooltip-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border:none;
+    margin-top: 2px;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-bottom: 6px;
+
+}
+
+#better-maps-tooltip-title {
+    font-size: 22px;
+}
+
+#better-maps-tooltip-reporting {
+    margin-left: 10px;
+    font-size: 16px;
+}
+
+#better-maps-tooltip-no-election,
+#better-maps-tooltip-not-counted {
+    font-size: 16px;
+    margin-left: 10px;
+    margin-right: 10px;
+    max-width: 280px;
+}
+
+#better-maps-tooltip-electors {
+    font-size: 14px;
+    font-style: italic;
+    text-align: right;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-bottom: 3px;
+}
+
+#better-maps-tooltip-entries {
+    display:flex;
+    flex-direction:row;
+    align-items:flex-start;
+    gap:12px;
+}
+
+
+#better-maps-tooltip-entries hr {
+    width: 100% !important;
+    margin-top: 0px !important;
+}
+
+.better-maps-tooltip-entry {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    margin-bottom: 5px;
+}
+
+.better-maps-tooltip-party-tab {
+    width: 5px;
+    height: 48px;
+    border-radius: 2px;
+}
+
+.better-maps-tooltip-entry-main {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+    margin-left: 8px;
+}
+
+.better-maps-tooltip-entry-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    font-size: 20px;
+}
+
+.better-maps-tooltip-vote-share {
+    margin-left: auto;
+    margin-right: 0px;
+}
+
+.better-maps-tooltip-vote-count {
+    font-size: 14px;
+    text-align: right;
+    width: 100%;
+    
+}
+
+#ePageProjectB,
+#ePageMarginB {
+    z-index: 3;
+}
+
+.electNightInnP {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+
+.bm-table-results {
+    width: auto; 
+    border-collapse: collapse;
+    border: none !important;
+    font-size: 16px;
+    color: #000;
+    margin-bottom: 2px;
+    margin-left: 10px;
+   
+    
+}
+
+.bm-table-results th,
+.bm-table-results td {
+    padding: 6px 10px;
+    vertical-align: middle;
+}
+
+
+.bm-table-results td:nth-child(3),
+.bm-table-results td:nth-child(4) {
+    text-align: right;
+}
+
+.letter-party-r {
+    background-color: #DD2929 !important;
+    color: #fff;
+    height: 100%;
+    border-radius: 3px;
+    margin: 0px 10px;
+    font-weight: bold;
+    text-align: center;
+
+}
+
+.letter-party-d {
+    background-color: #0487E6 !important;
+    color: #fff;
+    height: 100%;
+    border-radius: 3px;
+    font-weight: bold;
+    text-align: center;
+    margin: 0px 10px;
+}
+
+.letter-party-i {
+    background-color: #7A7A7A !important;
+    color: #fff;
+    height: 100%;
+    border-radius: 3px;
+    text-align: center;
+    font-weight: bold;
+    margin: 0px 10px;
+}
+
+td.winner-r {
+    background-color: #DD2929;
+    color: #fff;
+}
+
+td.winner-d {
+    background-color: #0487E6;
+    color: #fff;
+}
+
+td.winner-i {
+    background-color: #7A7A7A;
+    color: #fff;
+
+}
+
+.candidate-wrapper {
+    display: inline-flex;
+    align-items: center; 
+   
+}
+
+.winner-icon {
+    background-color: #FFD60C;
+    height: 16px;
+    width: 16px;
+    vertical-align: bottom;
+    stroke: #2A2A2A;
+}
+.cellCandidate{
+    font-weight: bold;
+}
+
+.cellVotes{
+    font-weight: 500;
+}
+
+.cellPct{
+    font-weight: bold;
+}
+
+.state-info {
+    display: flex;
+    flex-direction: column;
+    border: none;
+    text-align: left !important;    
+    vertical-align: top !important; 
+    padding: 0 !important;          
+    margin: 0 !important;   
+}       
+
+.stateCell{
+    border: none;
+    margin: 0 !important;
+    padding: 0px 12px 0px 0px !important;        
+}
+
+.state-info .state-name {
+    font-size: 16px;
+    color: black;
+    font-weight: bold;
+}
+
+.state-info .state-electors {
+    font-weight: bold;
+    font-size: 13px;
+    color: black;
+}
+
+.state-info .state-reporting {
+    font-size: 16px;
+    font-style: normal;
+    color: black;
+}
+
+.thState{
+    vertical-align: top;
+}
+
+#better-maps-tooltip-seatgain {
+    display: inline-block;
+    background-color: #000000;
+    color:white;
+    font-weight: bold;
+    padding: 0.25rem 0.25rem;
+    line-height: 1;
+    margin-top: -2px;
+    margin-left: 10px;
+    margin-right: 2px;
+    width: auto !important;       
+    max-width: fit-content;       
+}
+.seat-gain-badge{
+    background-color: black;
+    font-weight: bold;
+    padding: 0.2rem 0.35rem;
+    line-height: 1;
+    display: inline-block;
+    border-radius: 3px;
+}
+
+#better-maps-tooltip-projectedwinner {
+    display: inline-block;
+    background-color: #FFD60C;
+    font-weight: bold;
+    padding: 0.50rem 0.50rem;
+    line-height: 1;
+    margin-top: -2px;
+    margin-left: 10px;
+    margin-right: 2px;
+    width: auto !important;
+    max-width: fit-content;
+}
+
+.flipProjectedWinner{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: black;
+    color: white;
+    font-size: 14px;
+    margin-left: 6px;
+    font-weight: bold;
+    padding: 0.2rem 0.35rem;
+    line-height: 1;
+    display: inline-block;
+}
+
+.winner-iconFLIP{
+    background-color: black;
+    height: 14;
+    width: 14px;
+    vertical-align: bottom;
+    stroke: white;
+}
+
+.battlegroundState{
+    color: #2a2a2a;
+    border: 1px solid #ffd60f;
+    background-color: #fcefb3;
+    width: auto !important;
+    max-width: fit-content;  
+    font-size: 15px;
+    font-weight: bold;
+    padding: 4px;
+}
+
+.state-difference{
+    font-size: 12px;
+    padding: 4px 4px 4px 0px;
+    font-weight: bold;
+}
+
+#better-maps-tooltip-earlycall{
+    background-color: #FFD60C;
+    font-weight: bold;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-top: 10px;
+    padding: 0.50rem 0.50rem;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+    width: auto !important;
+    max-width: fit-content;
+}
+#better-maps-tooltip-closecall{
+    background-color: #FFD60C;
+    font-weight: bold;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-top: 10px;
+    padding: 0.50rem 0.50rem;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+    width: auto !important;
+    max-width: fit-content;
+}
+
+
+#better-maps-tooltip-turnout { 
+  width: auto;
+  text-align: right;
+  padding: 0px 7px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.bm-panel-reported{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin-left: 2px;
+  margin-top: 4px;
+  margin-right: 10px;
+}
+
+.bm-expected{
+  padding:0;
+  background:#fff;
+  border:1px solid #d9d9d9;
+}
+.bm-expected .bx-title{
+  background:#111;
+  color:#fff;
+  font-weight:900;
+  font-size:14px;
+  padding:4px 8px;
+  letter-spacing:.5px;
+}
+.bm-expected .bx-body{
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+  padding:6px 8px;
+  white-space:nowrap;
+}
+.val-expected{ font-size: 14px; font-weight:bold; color:#000; }
+.bx-sub{ font-size:9px; font-weight:bold; color:#000; letter-spacing:.2px; }
+
+.bm-middle{
+  display:flex;
+  align-items:flex-end;
+  gap:12px;
+}
+
+.bm-barWrap{
+  position: relative;
+  width: 32px;
+  height: 110px;
+  overflow: visible;                
+}
+
+.bm-bar,
+.bm-fill{
+  left: 0;
+  width: var(--bm-bar-w);
+}
+
+.bm-bar{
+  position: absolute;
+  left: 12px;                        
+  bottom: 0;
+  width: 8px;                       
+  height: 100%;
+  background: #a0a0a0 !important;
+}
+
+.bm-fill{
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0%;
+  background: #f5c400;
+  transition: height .25s ease;
+}
+
+.bm-pointer{
+  position: absolute;
+  right: -10px;                   
+  width: 10px;
+  height: 12px;
+  top: 100%;                       
+  transform: translateY(-50%);    
+  background: #222;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+  pointer-events: none;
+}
+
+.bm-right{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.bm-box{
+  padding:6px 8px;
+  background:#c9c9c9;
+  white-space:nowrap;
+  border-left:5px solid;
+}
+.bm-remaining{ border-color:#a0a0a0; }     
+.bm-reported{ border-color:#FFD60C; }      
+
+.val-remaining,
+.val-reported{
+  font-size:13px;
+  font-weight:bold;
+  color:#000;
+  line-height:1.1;
+}
+
+.label-remaining,
+.label-reported{
+  margin-top:2px;
+  font-size:10px;
+  font-weight:800;
+  color:#939393;
+  text-transform:uppercase;
+  letter-spacing:.2px;
+}
+
+
+#better-maps-tooltip-panels{
+  flex:0 0 160px;         
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-bottom: 10px;
+}

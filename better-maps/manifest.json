@@ -1,0 +1,17 @@
+{
+    "id": "better-maps-nbc",
+    "name": "Better Election Maps (NBC NEWS Edition)",
+    "description": "Adds improved maps for election results to the user interface.",
+    "author": "Juanma",
+    "version": {
+        "major": 0,
+        "minor": 2,
+        "revision": 0,
+        "string": "v0.2.0"
+    },
+    "required_loader_version": {
+        "major": 0,
+        "minor": 1,
+        "revision": 0
+    }
+}
