@@ -1,31 +1,28 @@
-/* Better Election Maps - better-maps/styles/dark.css
-   Dark mode styling for UI elements */
-
-#better-maps-tooltip {
-   background: hsl(0, 0%, 20%);
+﻿#better-maps-tooltip {
+   background: linear-gradient(to bottom, hsl(216, 100%, 51%), hsl(220, 100%, 70%));
    color: hsl(0, 0%, 80%);
 }
-
+#better-maps-tooltip.bm-detached-primary-tooltip {
+   background: transparent;
+}
+#better-maps-tooltip.bm-detached-primary-tooltip .bm-primary-section {
+   background: linear-gradient(to bottom, hsl(216, 100%, 51%), hsl(220, 100%, 70%));
+}
 #dc-state-path,#dc-state-path-live {
    stroke: hsl(0, 0%, 20%);
    stroke-width: 1px;
 }
-
 .better-maps-state-path:hover {
    stroke: hsl(0, 0%, 0%) !important;
    stroke-width: 1px;
 }
-
 #better-maps-tooltip hr {
    width: calc(100% - 20px);
-
    margin-top: 5px;
    margin-bottom: 5px;
-
    border: 0px solid hsl(0, 0%, 60%);
    border-bottom-width: 1px;
 }
-
 #better-maps-tooltip-reporting {
    color: hsl(0, 0%, 60%);
 }

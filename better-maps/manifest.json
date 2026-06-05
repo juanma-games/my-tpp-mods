@@ -5,9 +5,9 @@
     "author": "Juanma",
     "version": {
         "major": 0,
-        "minor": 2,
+        "minor": 3,
         "revision": 0,
-        "string": "v0.2.0"
+        "string": "v0.3.0"
     },
     "required_loader_version": {
         "major": 0,

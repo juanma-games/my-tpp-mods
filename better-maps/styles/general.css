@@ -1,37 +1,27 @@
-/* Better Election Maps - better-maps/styles/general.css
-   General styling for UI elements */
-
-/* Define the custom font. */
-@font-face {
+﻿@font-face {
     font-family: "Oswald";
     src: url("plex-sans/oswald-light.woff2") format("woff2");
     font-weight: normal;
     font-style: normal;
 }
-
 @font-face {
     font-family: "Oswald";
     src: url("plex-sans/oswald-light.woff2") format("woff2");
     font-weight: normal;
     font-style: italic;
 }
-
 @font-face {
     font-family: "Oswald";
     src: url("plex-sans/oswald-regular.woff2") format("woff2");
     font-weight: bold;
     font-style: normal;
 }
-
 @font-face {
     font-family: "Oswald";
     src: url("plex-sans/oswald-regular.woff2") format("woff2");
     font-weight: bold;
     font-style: italic;
 }
-
-/* UI elements. */
-
 .better-maps-container {
     margin-left: 4px;
     margin-right: 4px;
@@ -39,7 +29,108 @@
     border-radius: 5px;
     z-index: 2;
 }
-
+.bm-house-district-grid-host {
+    position: relative;
+    float: left;
+    margin: 4px;
+    overflow: hidden;
+    border: 1px solid hsl(0, 0%, 15%);
+    border-radius: 5px;
+    background: linear-gradient(to bottom, #4c4c4c, #b8b8b8);
+}
+.bm-house-district-grid {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    padding: var(--bm-house-district-grid-top-space, 86px) 18px 12px;
+    color: #fff;
+    font-family: "Oswald", Georgia, Courier New, monospace;
+}
+.bm-house-district-grid-stage {
+    align-self: center;
+    margin: auto 0;
+    overflow: visible;
+}
+.bm-house-district-hex {
+    cursor: pointer;
+}
+.bm-house-district-hex-shape {
+    stroke: rgba(245, 248, 250, 0.92);
+    stroke-width: 1.25px;
+    stroke-linejoin: round;
+    shape-rendering: geometricPrecision;
+    vector-effect: non-scaling-stroke;
+    transition: filter 120ms ease, stroke 120ms ease;
+}
+.bm-house-district-hex-label {
+    fill: #fff;
+    font-size: 17px;
+    font-weight: bold;
+    line-height: 1;
+    pointer-events: none;
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+.bm-house-district-hex:hover .bm-house-district-hex-shape,
+.bm-house-district-hex:focus-visible .bm-house-district-hex-shape {
+    filter: brightness(1.16);
+    stroke: #fff;
+    stroke-width: 1.6px;
+}
+.bm-house-district-hex:focus {
+    outline: 0;
+}
+#bm-house-district-return {
+    position: absolute;
+    z-index: 9;
+    margin: 8px 0 0 12px;
+    padding: 2px 8px 3px;
+    border: 1px solid #333;
+    border-radius: 5px;
+    color: #111;
+    background: linear-gradient(to bottom, #f4f4f4, #d4d4d4);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 23px;
+    line-height: 1;
+    letter-spacing: 0;
+    cursor: pointer;
+}
+#bm-house-district-return:hover {
+    background: linear-gradient(to bottom, #fff, #dedede);
+}
+#bm-house-district-controls {
+    position: absolute;
+    top: 42px;
+    left: 12px;
+    z-index: 9;
+    display: flex;
+    gap: 5px;
+}
+.bm-house-district-mode-button {
+    padding: 2px 8px 3px;
+    border: 1px solid #333;
+    border-radius: 5px;
+    color: #111;
+    background: linear-gradient(to bottom, #f4f4f4, #d4d4d4);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 23px;
+    line-height: 1;
+    letter-spacing: 0;
+    cursor: pointer;
+}
+.bm-house-district-mode-button.active {
+    border-color: #111;
+    background: linear-gradient(to bottom, #e5e5e5, #c7c7c7);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.bm-house-district-mode-button:hover {
+    background: linear-gradient(to bottom, #fff, #dedede);
+}
 #eSimMapDivRel .better-maps-container,
 #eSimMapDiv .better-maps-container {
     float: left;
@@ -47,11 +138,87 @@
     border-color: hsl(0, 0%, 20%);
     border-radius: 10px;
 }
-
 #polProfInnerContent .better-maps-container {
     border-color: hsl(0, 0%, 20%);
 }
-
+#eNightProjectB,
+#eNightMarginB {
+    z-index: 8;
+}
+.bm-map-svg-wrapper {
+    position: relative;
+}
+.bm-senate-banner-host,
+.bm-house-banner-host {
+    position: relative;
+}
+#bm-senate-banner,
+#bm-house-banner {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    top: 48px;
+    z-index: 5;
+    box-sizing: border-box;
+    width: auto;
+    min-height: 50px;
+    margin: 0;
+    padding: 11px 12px;
+    color: #fff;
+    font-family: "Oswald", Georgia, Courier New, monospace;
+    font-size: 30px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    border: 1px solid rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.14);
+    pointer-events: none;
+}
+#bm-senate-banner.show,
+#bm-house-banner.show {
+    display: flex;
+}
+#bm-senate-banner.senate-control-r,
+#bm-house-banner.house-control-r {
+    background: #b80000;
+}
+#bm-senate-banner.senate-control-d,
+#bm-house-banner.house-control-d {
+    background: #006bb6;
+}
+#bm-senate-banner.senate-control-t,
+#bm-house-banner.house-control-t {
+    background: #666;
+}
+.bm-senate-control-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 32px;
+    background: #FFD60C;
+    color: #111;
+    flex: 0 0 38px;
+}
+.bm-senate-control-check svg {
+    width: 26px;
+    height: 26px;
+    stroke: currentColor;
+}
+.bm-senate-control-divider {
+    width: 2px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.55);
+    flex: 0 0 2px;
+}
+.bm-senate-control-count {
+    margin-left: auto;
+    font-size: 18px;
+}
 #better-maps-tooltip {
     z-index: 4;
     position: fixed;
@@ -64,7 +231,6 @@
     padding-bottom: 5px;
     font-family: "Oswald", Georgia, Courier New, monospace;
 }
-
 #better-maps-tooltip-win-line {
     width: 100%;
     height: 10px;
@@ -72,13 +238,11 @@
     border-top-right-radius: 0px;
     background: #cccccc;
 }
-
 #better-maps-tooltip hr {
     width: calc(100% - 20px);
     margin-top: 5px;
     margin-bottom: 5px;
 }
-
 #better-maps-tooltip-header {
     display: flex;
     align-items: center;
@@ -88,18 +252,14 @@
     margin-left: 10px;
     margin-right: 10px;
     margin-bottom: 6px;
-
 }
-
 #better-maps-tooltip-title {
     font-size: 22px;
 }
-
 #better-maps-tooltip-reporting {
     margin-left: 10px;
     font-size: 16px;
 }
-
 #better-maps-tooltip-no-election,
 #better-maps-tooltip-not-counted {
     font-size: 16px;
@@ -107,7 +267,46 @@
     margin-right: 10px;
     max-width: 280px;
 }
-
+.bm-polls-closing-card {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: fit-content;
+    min-width: 180px;
+    margin-top: 4px;
+    margin-left: auto;
+    margin-right: auto;
+    color: #000;
+    font-weight: bold;
+    line-height: 1;
+    background: #FFD60C;
+    border: 1px solid #d4a900;
+}
+.bm-polls-closing-tooltip {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    min-width: 0 !important;
+    padding-bottom: 0 !important;
+}
+.bm-polls-closing-tooltip #better-maps-tooltip-not-counted {
+    margin: 0 !important;
+}
+.bm-polls-closing-label {
+    padding: 5px 8px 4px 8px;
+    font-size: 15px;
+    text-align: center;
+}
+.bm-polls-closing-time {
+    background: #f2f2f2;
+    margin: 0 6px 6px 6px;
+    padding: 8px 12px 10px 12px;
+    font-size: 46px;
+    text-align: center;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
 #better-maps-tooltip-electors {
     font-size: 14px;
     font-style: italic;
@@ -116,20 +315,16 @@
     margin-right: 10px;
     margin-bottom: 3px;
 }
-
 #better-maps-tooltip-entries {
     display:flex;
     flex-direction:row;
     align-items:flex-start;
     gap:12px;
 }
-
-
 #better-maps-tooltip-entries hr {
     width: 100% !important;
     margin-top: 0px !important;
 }
-
 .better-maps-tooltip-entry {
     display: flex;
     flex-direction: row;
@@ -137,13 +332,11 @@
     flex-grow: 1;
     margin-bottom: 5px;
 }
-
 .better-maps-tooltip-party-tab {
     width: 5px;
     height: 48px;
     border-radius: 2px;
 }
-
 .better-maps-tooltip-entry-main {
     display: flex;
     flex-direction: column;
@@ -152,7 +345,6 @@
     width: 100%;
     margin-left: 8px;
 }
-
 .better-maps-tooltip-entry-top {
     display: flex;
     justify-content: space-between;
@@ -160,55 +352,106 @@
     width: 100%;
     font-size: 20px;
 }
-
 .better-maps-tooltip-vote-share {
     margin-left: auto;
     margin-right: 0px;
 }
-
 .better-maps-tooltip-vote-count {
     font-size: 14px;
     text-align: right;
     width: 100%;
-    
 }
-
 #ePageProjectB,
 #ePageMarginB {
     z-index: 3;
 }
-
 .electNightInnP {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
-
-
 .bm-table-results {
-    width: auto; 
+    width: auto;
     border-collapse: collapse;
     border: none !important;
     font-size: 16px;
     color: #000;
     margin-bottom: 2px;
     margin-left: 10px;
-   
-    
 }
-
+.bm-primary-section {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+.bm-detached-primary-tooltip {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding-bottom: 0 !important;
+}
+.bm-primary-stack {
+    flex-direction: column !important;
+    gap: 10px !important;
+    align-items: stretch !important;
+}
+.bm-primary-stack .bm-primary-section {
+    border: 1px solid hsl(0, 0%, 15%);
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    padding: 8px 0 6px 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+.bm-primary-stack .bm-table-results {
+    width: calc(100% - 20px);
+}
+.bm-primary-section-title {
+    margin-left: 10px;
+    margin-bottom: 4px;
+    padding: 3px 8px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    border-radius: 4px;
+    width: fit-content;
+}
+.bm-primary-section-title-d {
+    background-color: #0487E6;
+}
+.bm-primary-section-title-r {
+    background-color: #DD2929;
+}
+.bm-primary-turnout {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+.bm-primary-section-turnout-row {
+    padding-top: 22px;
+}
+.bm-primary-winner-badge {
+    display: inline-block;
+    background-color: #FFD60C;
+    color: #000;
+    font-weight: bold;
+    padding: 0.45rem 0.5rem;
+    line-height: 1;
+    margin: 4px 10px 6px 10px;
+    width: fit-content;
+}
 .bm-table-results th,
 .bm-table-results td {
     padding: 6px 10px;
     vertical-align: middle;
+    white-space: nowrap;
 }
-
-
 .bm-table-results td:nth-child(3),
 .bm-table-results td:nth-child(4) {
     text-align: right;
 }
-
 .letter-party-r {
     background-color: #DD2929 !important;
     color: #fff;
@@ -217,9 +460,7 @@
     margin: 0px 10px;
     font-weight: bold;
     text-align: center;
-
 }
-
 .letter-party-d {
     background-color: #0487E6 !important;
     color: #fff;
@@ -229,7 +470,6 @@
     text-align: center;
     margin: 0px 10px;
 }
-
 .letter-party-i {
     background-color: #7A7A7A !important;
     color: #fff;
@@ -239,6 +479,7 @@
     font-weight: bold;
     margin: 0px 10px;
 }
+
 
 td.winner-r {
     background-color: #DD2929;
@@ -250,18 +491,81 @@ td.winner-d {
     color: #fff;
 }
 
+td.winner-id {
+    background-color: #E6F2FF;
+    color: #111;
+}
+
+td.winner-ir {
+    background-color: #FFF5F5;
+    color: #111;
+}
+
 td.winner-i {
     background-color: #7A7A7A;
     color: #fff;
-
 }
 
+td.winner-r,
+td.winner-d,
+td.winner-id,
+td.winner-ir,
+td.winner-i {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background-clip: border-box;
+}
+.bm-primary-vote-shade {
+    border-radius: 4px;
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+}
 .candidate-wrapper {
     display: inline-flex;
-    align-items: center; 
-   
+    align-items: center;
 }
-
+.bm-candidate-name-wrapper {
+    gap: 6px;
+}
+.bm-candidate-avatar {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    overflow: hidden;
+    background: var(--bm-candidate-avatar-fill, transparent);
+    border: 0;
+    box-shadow: inset 0 0 0 2px var(--bm-candidate-avatar-stroke, transparent);
+    box-sizing: border-box;
+    vertical-align: middle;
+    image-rendering: auto;
+}
+.bm-candidate-avatar-placeholder {
+    position: relative;
+    display: inline-block;
+}
+.bm-candidate-avatar-placeholder::before {
+    content: "";
+    position: absolute;
+    left: 11px;
+    top: 7px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #9d9d9d;
+}
+.bm-candidate-avatar-placeholder::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    bottom: 4px;
+    width: 20px;
+    height: 12px;
+    border-radius: 11px 11px 0 0;
+    background: #9d9d9d;
+}
 .winner-icon {
     background-color: #FFD60C;
     height: 16px;
@@ -271,54 +575,232 @@ td.winner-i {
 }
 .cellCandidate{
     font-weight: bold;
+    white-space: nowrap;
+    min-width: 84px;
 }
-
 .cellVotes{
     font-weight: 500;
+    min-width: 74px;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
 }
-
 .cellPct{
     font-weight: bold;
+    min-width: 62px;
+    text-align: right;
+    white-space: nowrap;
+    position: relative;
+    overflow: visible;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
 }
-
+.cellDelegates {
+    min-width: 72px;
+    font-weight: bold;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+.bm-presidential-primary-results-table th:nth-last-child(2),
+.bm-presidential-primary-results-table .cellPct {
+    padding-right: 18px;
+}
+.bm-house-summary-table {
+    margin-top: 2px;
+    margin-right: 10px;
+}
+.bm-house-summary-table th:nth-child(4),
+.bm-house-summary-table th:nth-child(5),
+.bm-house-summary-table th:nth-child(6) {
+    text-align: right;
+}
+.bm-house-summary-table .letter-party-r,
+.bm-house-summary-table .letter-party-d,
+.bm-house-summary-table .letter-party-i {
+    display: inline-block;
+    min-width: 22px;
+    box-sizing: border-box;
+    margin: 0 8px;
+    padding: 2px 4px;
+    font-size: 15px;
+    line-height: 18px;
+}
+.bm-house-seats {
+    min-width: 84px;
+    font-weight: bold;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+.bm-house-seat-delta {
+    display: inline-flex;
+    min-width: 30px;
+    margin-left: 5px;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 16px;
+    text-align: center;
+    white-space: nowrap;
+}
+.bm-house-seat-delta-gain {
+    color: #075b26;
+    background: #d8f0df;
+}
+.bm-house-seat-delta-loss {
+    color: #9b111e;
+    background: #f5d8dc;
+}
+.bm-house-seat-delta-even {
+    color: #3f3f3f;
+    background: #e1e1e1;
+}
+.pct-delta-badge {
+    position: absolute;
+    right: -8px;
+    top: -10px;
+    z-index: 20;
+    color: #fff;
+    min-width: 42px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+    padding: 3px 5px;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    pointer-events: none;
+    animation: pctDeltaFlash 1.05s ease-out forwards;
+}
+.bm-general-results-table-president .pct-delta-badge {
+    right: -8px;
+    top: -4px;
+}
+.bm-general-results-table-ussenate .pct-delta-badge,
+.bm-general-results-table-governor .pct-delta-badge {
+    top: -4px;
+}
+.pct-delta-primary {
+    right: 0;
+    top: -7px;
+    min-width: 42px;
+    gap: 3px;
+    font-size: 11px;
+    padding: 3px 5px;
+}
+.pct-delta-primary .pct-delta-sign {
+    width: 8px;
+    height: 9px;
+    flex-basis: 8px;
+}
+.pct-delta-primary .pct-delta-sign::before {
+    width: 8px;
+    height: 2px;
+}
+.pct-delta-primary .pct-delta-sign-plus::after {
+    width: 2px;
+    height: 8px;
+}
+.pct-delta-sign {
+    position: relative;
+    display: inline-block;
+    width: 10px;
+    height: 11px;
+    flex: 0 0 10px;
+}
+.pct-delta-sign::before,
+.pct-delta-sign::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: #fff;
+    transform: translate(-50%, -50%);
+}
+.pct-delta-sign::before {
+    width: 9px;
+    height: 2px;
+}
+.pct-delta-sign-plus::after {
+    width: 2px;
+    height: 9px;
+}
+.pct-delta-sign-minus::after {
+    display: none;
+}
+.pct-delta-r {
+    background-color: #DD2929;
+}
+.pct-delta-d {
+    background-color: #0487E6;
+}
+.pct-delta-i {
+    background-color: #7A7A7A;
+}
+@keyframes pctDeltaFlash {
+    0% {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    12% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    78% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
 .state-info {
     display: flex;
     flex-direction: column;
     border: none;
-    text-align: left !important;    
-    vertical-align: top !important; 
-    padding: 0 !important;          
-    margin: 0 !important;   
-}       
-
+    text-align: left !important;
+    vertical-align: top !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
 .stateCell{
     border: none;
     margin: 0 !important;
-    padding: 0px 12px 0px 0px !important;        
+    padding: 0px 12px 0px 0px !important;
 }
-
 .state-info .state-name {
     font-size: 16px;
     color: black;
     font-weight: bold;
 }
-
 .state-info .state-electors {
     font-weight: bold;
     font-size: 13px;
     color: black;
 }
-
 .state-info .state-reporting {
     font-size: 16px;
     font-style: normal;
     color: black;
 }
-
 .thState{
     vertical-align: top;
 }
-
 #better-maps-tooltip-seatgain {
     display: inline-block;
     background-color: #000000;
@@ -329,8 +811,8 @@ td.winner-i {
     margin-top: -2px;
     margin-left: 10px;
     margin-right: 2px;
-    width: auto !important;       
-    max-width: fit-content;       
+    width: auto !important;
+    max-width: fit-content;
 }
 .seat-gain-badge{
     background-color: black;
@@ -340,7 +822,6 @@ td.winner-i {
     display: inline-block;
     border-radius: 3px;
 }
-
 #better-maps-tooltip-projectedwinner {
     display: inline-block;
     background-color: #FFD60C;
@@ -353,7 +834,6 @@ td.winner-i {
     width: auto !important;
     max-width: fit-content;
 }
-
 .flipProjectedWinner{
     display: flex;
     justify-content: center;
@@ -367,7 +847,6 @@ td.winner-i {
     line-height: 1;
     display: inline-block;
 }
-
 .winner-iconFLIP{
     background-color: black;
     height: 14;
@@ -375,24 +854,22 @@ td.winner-i {
     vertical-align: bottom;
     stroke: white;
 }
-
 .battlegroundState{
     color: #2a2a2a;
     border: 1px solid #ffd60f;
     background-color: #fcefb3;
     width: auto !important;
-    max-width: fit-content;  
+    max-width: fit-content;
     font-size: 15px;
     font-weight: bold;
     padding: 4px;
 }
-
 .state-difference{
     font-size: 12px;
     padding: 4px 4px 4px 0px;
     font-weight: bold;
+    white-space: nowrap;
 }
-
 #better-maps-tooltip-earlycall{
     background-color: #FFD60C;
     font-weight: bold;
@@ -417,16 +894,25 @@ td.winner-i {
     width: auto !important;
     max-width: fit-content;
 }
-
-
-#better-maps-tooltip-turnout { 
+#better-maps-tooltip-runoff{
+    background-color: #FFD60C;
+    font-weight: bold;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-top: 10px;
+    padding: 0.50rem 0.50rem;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+    width: auto !important;
+    max-width: fit-content;
+}
+#better-maps-tooltip-turnout {
   width: auto;
   text-align: right;
   padding: 0px 7px;
   font-size: 13px;
   font-weight: bold;
 }
-
 .bm-panel-reported{
   display:flex;
   flex-direction:column;
@@ -435,7 +921,6 @@ td.winner-i {
   margin-top: 4px;
   margin-right: 10px;
 }
-
 .bm-expected{
   padding:0;
   background:#fff;
@@ -458,35 +943,30 @@ td.winner-i {
 }
 .val-expected{ font-size: 14px; font-weight:bold; color:#000; }
 .bx-sub{ font-size:9px; font-weight:bold; color:#000; letter-spacing:.2px; }
-
 .bm-middle{
   display:flex;
   align-items:flex-end;
   gap:12px;
 }
-
 .bm-barWrap{
   position: relative;
   width: 32px;
   height: 110px;
-  overflow: visible;                
+  overflow: visible;
 }
-
 .bm-bar,
 .bm-fill{
   left: 0;
   width: var(--bm-bar-w);
 }
-
 .bm-bar{
   position: absolute;
-  left: 12px;                        
+  left: 12px;
   bottom: 0;
-  width: 8px;                       
+  width: 8px;
   height: 100%;
   background: #a0a0a0 !important;
 }
-
 .bm-fill{
   position: absolute;
   left: 0;
@@ -496,34 +976,30 @@ td.winner-i {
   background: #f5c400;
   transition: height .25s ease;
 }
-
 .bm-pointer{
   position: absolute;
-  right: -10px;                   
+  right: -10px;
   width: 10px;
   height: 12px;
-  top: 100%;                       
-  transform: translateY(-50%);    
+  top: 100%;
+  transform: translateY(-50%);
   background: #222;
   clip-path: polygon(0 50%, 100% 0, 100% 100%);
   pointer-events: none;
 }
-
 .bm-right{
   display:flex;
   flex-direction:column;
   gap:8px;
 }
-
 .bm-box{
   padding:6px 8px;
   background:#c9c9c9;
   white-space:nowrap;
   border-left:5px solid;
 }
-.bm-remaining{ border-color:#a0a0a0; }     
-.bm-reported{ border-color:#FFD60C; }      
-
+.bm-remaining{ border-color:#a0a0a0; }
+.bm-reported{ border-color:#FFD60C; }
 .val-remaining,
 .val-reported{
   font-size:13px;
@@ -531,7 +1007,6 @@ td.winner-i {
   color:#000;
   line-height:1.1;
 }
-
 .label-remaining,
 .label-reported{
   margin-top:2px;
@@ -541,10 +1016,8 @@ td.winner-i {
   text-transform:uppercase;
   letter-spacing:.2px;
 }
-
-
 #better-maps-tooltip-panels{
-  flex:0 0 160px;         
+  flex:0 0 160px;
   display:flex;
   flex-direction:column;
   gap:8px;
