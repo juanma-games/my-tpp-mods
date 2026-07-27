@@ -1,0 +1,720 @@
+.bm-special-election-night,
+.bm-special-election-modal-backdrop,
+.bm-special-election-blocker {
+    font-family: "Oswald", Arial, sans-serif;
+}
+
+body.bm-special-election-active #bm-msnbc-election-btn {
+    display: none !important;
+}
+
+.bm-special-election-night {
+    position: fixed;
+    inset: 0;
+    z-index: 2147482000;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    color: #111820;
+    background: #d9dfe3;
+}
+
+.bm-special-election-topbar {
+    min-height: 58px;
+    display: grid;
+    grid-template-columns: minmax(250px, auto) 1fr auto;
+    align-items: stretch;
+    color: #fff;
+    background: linear-gradient(105deg, #071a2a 0%, #14344d 55%, #7d0718 100%);
+    border-bottom: 4px solid #f7cd14;
+}
+
+.bm-special-election-brand {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6px 18px;
+    line-height: 1.05;
+}
+
+.bm-special-election-brand strong {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.bm-special-election-brand span {
+    margin-top: 3px;
+    color: #f7cd14;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .09em;
+}
+
+.bm-special-election-tabs {
+    display: flex;
+    align-items: end;
+    gap: 7px;
+    padding: 0 10px;
+}
+
+.bm-special-election-tabs button,
+.bm-special-election-controls button,
+.bm-special-election-map-back,
+.bm-special-election-modal button,
+.bm-special-election-reopen {
+    font-family: "Oswald", Arial, sans-serif;
+}
+
+.bm-special-election-tabs button {
+    min-width: 130px;
+    padding: 9px 18px 8px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+    background: #168bd2;
+    border: 0;
+    border-radius: 4px 4px 0 0;
+}
+
+.bm-special-election-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+}
+
+.bm-special-election-clock {
+    min-width: 56px;
+    color: #fff;
+    font-size: 22px;
+    text-align: center;
+}
+
+.bm-special-election-controls button {
+    min-height: 34px;
+    padding: 4px 11px;
+    color: #071a2a;
+    font-size: 15px;
+    font-weight: 700;
+    background: #f2f2f2;
+    border: 1px solid #06131f;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.bm-special-election-controls .bm-special-election-close {
+    min-width: 36px;
+    color: #fff;
+    font-size: 24px;
+    line-height: 1;
+    background: #e62b2f;
+}
+
+.bm-special-election-headline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 18px;
+    color: #071a2a;
+    background: #fff;
+    border-bottom: 1px solid #abb3b9;
+}
+
+.bm-special-election-headline h1 {
+    margin: 0;
+    font-size: clamp(22px, 2.4vw, 38px);
+    line-height: 1.1;
+}
+
+.bm-special-election-headline span {
+    padding: 4px 10px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: #172735;
+}
+
+.bm-special-election-content {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(420px, 55%) minmax(360px, 45%);
+    gap: 5px;
+    padding: 5px;
+}
+
+.bm-special-election-content.bm-special-election-list-only {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.bm-special-election-list-only .bm-special-election-map {
+    display: none;
+}
+
+.bm-special-election-list-only .bm-special-election-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+    align-content: start;
+    gap: 10px;
+}
+
+.bm-special-election-list-only .bm-special-race-card {
+    margin-bottom: 0;
+}
+
+.bm-special-election-map,
+.bm-special-election-panel {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: linear-gradient(#67696a, #bfc1c2);
+    border: 1px solid #25313a;
+}
+
+.bm-special-election-map {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bm-special-election-svg {
+    width: 94%;
+    height: 92%;
+    display: block;
+    overflow: visible;
+}
+
+.bm-special-election-svg path {
+    transition: fill .3s ease, filter .15s ease;
+}
+
+.bm-special-election-svg path:hover {
+    filter: brightness(1.08);
+}
+
+.bm-special-election-map-back {
+    position: absolute;
+    z-index: 3;
+    top: 10px;
+    left: 10px;
+    padding: 5px 12px;
+    font-size: 16px;
+    background: #f2f2f2;
+    border: 1px solid #151515;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.bm-special-election-map-error {
+    padding: 25px;
+    color: #fff;
+    font-size: 24px;
+    text-align: center;
+}
+
+.bm-special-election-panel {
+    overflow-y: auto;
+    padding: 8px;
+    background: #edf0f2;
+}
+
+.bm-special-race-card {
+    margin: 0 0 10px;
+    background: #fff;
+    border: 1px solid #9ca5ac;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, .16);
+}
+
+.bm-special-race-header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 10px 6px;
+    border-bottom: 1px solid #c1c6ca;
+}
+
+.bm-special-race-state {
+    color: #555f67;
+    font-size: 15px;
+}
+
+.bm-special-race-header h2 {
+    margin: 0;
+    font-size: clamp(21px, 2vw, 30px);
+    line-height: 1.05;
+}
+
+.bm-special-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    background: #59636a;
+}
+
+.bm-special-status.projected,
+.bm-special-status.early,
+.bm-special-status.close {
+    color: #111;
+    background: #ffd51a;
+}
+
+.bm-special-status.projected {
+    padding: 8px;
+}
+
+.bm-special-status.counting {
+    background: #172735;
+}
+
+.bm-special-reporting {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 5px 12px;
+    padding: 6px 10px 8px;
+    font-size: 16px;
+}
+
+.bm-special-card-turnout {
+    white-space: nowrap;
+}
+
+.bm-special-progress-track {
+    grid-column: 1 / -1;
+    height: 7px;
+    overflow: hidden;
+    background: #d0d4d7;
+}
+
+.bm-special-progress-fill {
+    height: 100%;
+    background: #222;
+    transition: width .22s linear;
+}
+
+.bm-special-candidate-list {
+    border-top: 1px solid #c1c6ca;
+}
+
+.bm-special-candidate {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) 28px 106px 82px;
+    align-items: center;
+    gap: 6px;
+    min-height: 54px;
+    padding: 4px 10px;
+    border-bottom: 1px solid #d1d4d6;
+}
+
+.bm-special-candidate-identity {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 46px;
+    box-sizing: border-box;
+    padding: 3px 7px;
+}
+
+.bm-special-candidate.projected-winner .bm-special-candidate-identity {
+    color: #fff;
+    background: var(--bm-special-candidate-colour, #353535);
+}
+
+.bm-special-candidate-identity strong {
+    overflow: hidden;
+    font-size: clamp(18px, 1.7vw, 26px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bm-special-candidate-party {
+    justify-self: center;
+    width: 16px;
+    min-width: 16px;
+    height: 23px;
+    box-sizing: border-box;
+    padding: 0;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 23px;
+    text-align: center;
+    border-radius: 3px;
+}
+
+.bm-special-candidate-votes {
+    box-sizing: border-box;
+    width: 106px;
+    padding-left: 0;
+    color: #29323a;
+    font-family: inherit;
+    font-size: clamp(16px, 1.4vw, 21px);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    text-align: right;
+}
+
+.bm-special-candidate-pct {
+    min-width: 70px;
+    font-size: clamp(19px, 1.8vw, 28px);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.bm-special-margin {
+    padding: 6px 10px;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.bm-special-election-hover {
+    position: fixed;
+    z-index: 2147482100;
+    display: none;
+    max-width: 320px;
+    padding: 7px 10px;
+    color: #111;
+    font-size: 16px;
+    background: #fff;
+    border: 1px solid #111;
+    box-shadow: 0 3px 9px rgba(0, 0, 0, .28);
+    pointer-events: none;
+}
+
+.bm-special-election-hover.visible {
+    display: block;
+}
+
+.bm-special-election-result-tooltip {
+    width: min(550px, calc(100vw - 20px));
+    max-width: none;
+    box-sizing: border-box;
+    padding: 12px 10px 10px;
+    color: #111;
+    background: #f2f2f2;
+    border-top: 9px solid var(--bm-special-tooltip-accent, #737373);
+}
+
+.bm-special-tooltip-turnout {
+    min-height: 20px;
+    margin: 0 0 2px;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: right;
+}
+
+.bm-special-tooltip-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0 0 9px;
+    padding: 8px;
+    color: #111;
+    font-size: 16px;
+    font-weight: 700;
+    background: #ffd51a;
+}
+
+.bm-special-tooltip-winner-icon {
+    display: inline-block;
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    margin-left: 5px;
+    vertical-align: -2px;
+    color: #111;
+    background: #ffd60c;
+    stroke: currentColor;
+}
+
+.bm-special-status .bm-special-tooltip-winner-icon,
+.bm-special-tooltip-status .bm-special-tooltip-winner-icon {
+    margin-left: 0;
+}
+
+.bm-special-flip-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 6px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    background: #000;
+}
+
+.bm-special-flip-plus {
+    display: inline-block;
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 12px;
+}
+
+.bm-special-flip-text {
+    display: inline-block;
+}
+
+.bm-special-tooltip-columns {
+    display: grid;
+    grid-template-columns: 145px minmax(145px, 1fr) 38px 82px 66px;
+    align-items: end;
+    gap: 5px;
+    padding: 0 5px 4px;
+    font-size: 16px;
+}
+
+.bm-special-tooltip-columns strong:nth-child(4),
+.bm-special-tooltip-columns strong:nth-child(5) {
+    text-align: right;
+}
+
+.bm-special-tooltip-columns strong:nth-child(3) {
+    text-align: center;
+}
+
+.bm-special-tooltip-body {
+    display: grid;
+    grid-template-columns: 145px minmax(0, 1fr);
+    gap: 5px;
+}
+
+.bm-special-tooltip-location {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 5px 0;
+    font-size: 16px;
+}
+
+.bm-special-tooltip-location > strong {
+    font-size: 16px;
+    line-height: 1.08;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
+.bm-special-tooltip-margin {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.bm-special-tooltip-candidates {
+    min-width: 0;
+}
+
+.bm-special-tooltip-candidate {
+    display: grid;
+    grid-template-columns: minmax(145px, 1fr) 38px 82px 66px;
+    align-items: center;
+    gap: 5px;
+    min-height: 48px;
+    border-bottom: 0;
+}
+
+.bm-special-tooltip-identity {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 48px;
+    box-sizing: border-box;
+    margin-right: 8px;
+    padding: 0 7px;
+}
+
+.bm-special-tooltip-candidate.winner .bm-special-tooltip-identity {
+    color: #fff;
+    background: var(--bm-special-candidate-colour, #353535);
+}
+
+.bm-special-tooltip-name {
+    overflow: hidden;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bm-special-tooltip-party {
+    justify-self: center;
+    width: 16px;
+    min-width: 16px;
+    height: 23px;
+    box-sizing: border-box;
+    padding: 0;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 23px;
+    text-align: center;
+    border-radius: 3px;
+}
+
+.bm-special-tooltip-votes,
+.bm-special-tooltip-pct {
+    box-sizing: border-box;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    text-align: right;
+}
+
+.bm-special-tooltip-votes {
+    width: 82px;
+    font-size: 16px;
+}
+
+.bm-special-tooltip-pct {
+    width: 66px;
+    font-size: 16px;
+}
+
+.bm-special-tooltip-total {
+    display: grid;
+    grid-template-columns: 1fr 82px 66px;
+    gap: 5px;
+    align-items: center;
+    min-height: 36px;
+    font-size: 16px;
+    border-top: 1px solid #b8b8b8;
+}
+
+.bm-special-tooltip-total span {
+    grid-column: 2;
+    width: 82px;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    text-align: right;
+}
+
+.bm-special-election-modal-backdrop,
+.bm-special-election-blocker {
+    position: fixed;
+    inset: 0;
+    z-index: 2147482100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 17, 24, .78);
+}
+
+.bm-special-election-modal-backdrop {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.bm-special-election-modal-backdrop.bm-special-election-modal-ready {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity .1s ease-out;
+}
+
+.bm-special-election-modal {
+    width: min(760px, calc(100vw - 40px));
+    padding: 24px;
+    background: #f4f5f6;
+    border: 4px solid #172735;
+    box-shadow: 0 9px 35px rgba(0, 0, 0, .42);
+}
+
+.bm-special-election-modal-kicker {
+    display: inline-block;
+    padding: 5px 9px;
+    color: #111;
+    font-weight: 700;
+    background: #ffd51a;
+}
+
+.bm-special-election-modal h2 {
+    margin: 10px 0 4px;
+    font-size: 34px;
+}
+
+.bm-special-election-modal p {
+    margin: 5px 0 20px;
+    font-size: 19px;
+}
+
+.bm-special-election-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.bm-special-election-modal button {
+    padding: 8px 16px;
+    font-size: 18px;
+    font-weight: 700;
+    border: 1px solid #111;
+    cursor: pointer;
+}
+
+.bm-special-election-modal .bm-special-election-primary {
+    color: #fff;
+    background: #168bd2;
+}
+
+.bm-special-election-loading {
+    padding: 15px 20px;
+    color: #fff;
+    font-size: 26px;
+    background: #172735;
+    border-bottom: 5px solid #ffd51a;
+}
+
+.bm-special-election-reopen {
+    position: fixed;
+    z-index: 2147481900;
+    right: 12px;
+    bottom: 12px;
+    padding: 9px 13px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #168bd2 0 65%, #e62b2f 65% 100%);
+    border: 2px solid #0b1720;
+    border-radius: 4px;
+    box-shadow: 0 3px 9px rgba(0, 0, 0, .3);
+    cursor: pointer;
+}
+
+@media (max-width: 850px) {
+    .bm-special-election-topbar {
+        grid-template-columns: 1fr auto;
+    }
+
+    .bm-special-election-tabs {
+        display: none;
+    }
+
+    .bm-special-election-content {
+        grid-template-columns: 48% 52%;
+    }
+
+    .bm-special-candidate {
+        grid-template-columns: 30px minmax(90px, 1fr) minmax(60px, auto);
+    }
+
+    .bm-special-candidate-pct {
+        grid-column: 3;
+    }
+
+    .bm-special-candidate-votes {
+        display: none;
+    }
+}

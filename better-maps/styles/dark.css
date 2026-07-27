@@ -1,28 +1,590 @@
-﻿#better-maps-tooltip {
-   background: linear-gradient(to bottom, hsl(216, 100%, 51%), hsl(220, 100%, 70%));
-   color: hsl(0, 0%, 80%);
+:root {
+    --bm-map-pending-fill: #cccccc;
 }
-#better-maps-tooltip.bm-detached-primary-tooltip {
-   background: transparent;
+.better-maps-container {
+    border-color: hsl(0, 0%, 40%);
 }
-#better-maps-tooltip.bm-detached-primary-tooltip .bm-primary-section {
-   background: linear-gradient(to bottom, hsl(216, 100%, 51%), hsl(220, 100%, 70%));
+.bm-house-district-grid-host {
+    border-color: hsl(0, 0%, 40%);
+    background: linear-gradient(to bottom, hsl(0, 0%, 30%), hsl(0, 0%, 26%));
+}
+.bm-house-district-grid {
+    color: hsl(0, 0%, 100%);
+}
+.bm-house-district-hex-shape,
+.bm-house-state-district-shape {
+    stroke: hsla(204, 33%, 97%, 0.92);
+}
+.bm-house-district-hex-label {
+    fill: #fff;
+}
+#bm-house-politician-tooltip {
+    border-color: hsl(212, 29%, 13%);
+    border-top-color: var(--bm-house-politician-party-color, hsl(0, 0%, 40%));
+    background: hsl(0, 0%, 6%);
+    box-shadow: 0 5px 16px rgba(0,0,0,0.28);
+    color: hsl(0, 0%, 93%);
+}
+.bm-house-district-hex:hover .bm-house-district-hex-shape,
+.bm-house-district-hex:focus-visible .bm-house-district-hex-shape,
+.bm-house-state-district:hover .bm-house-state-district-shape,
+.bm-house-state-district:focus-visible .bm-house-state-district-shape {
+    stroke: hsl(0, 0%, 100%);
+}
+#bm-house-district-return {
+    border-color: hsl(0, 0%, 40%);
+    color: hsl(0, 0%, 93%);
+    background: linear-gradient(to bottom, hsl(0, 0%, 6%), hsl(0, 0%, 17%));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+#bm-house-district-return:hover {
+    background: linear-gradient(to bottom, hsl(0, 0%, 6%), hsl(0, 0%, 13%));
+}
+.bm-house-district-mode-button {
+    border-color: hsl(0, 0%, 40%);
+    color: hsl(0, 0%, 93%);
+    background: linear-gradient(to bottom, hsl(0, 0%, 6%), hsl(0, 0%, 17%));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.bm-house-district-mode-button.active {
+    border-color: hsl(0, 0%, 40%);
+    background: linear-gradient(to bottom, hsl(0, 0%, 10%), hsl(0, 0%, 22%));
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.bm-house-district-mode-button:hover {
+    background: linear-gradient(to bottom, hsl(0, 0%, 6%), hsl(0, 0%, 13%));
+}
+.bm-house-district-zoom-button {
+    border-color: hsl(0, 0%, 40%);
+    color: hsl(0, 0%, 93%);
+    background: linear-gradient(to bottom, hsl(0, 0%, 6%), hsl(0, 0%, 17%));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.bm-house-district-zoom-button:hover:not(:disabled) {
+    background: linear-gradient(to bottom, hsl(0, 0%, 6%), hsl(0, 0%, 13%));
+}
+#eSimMapDivRel .better-maps-container,
+#eSimMapDiv .better-maps-container {
+    border-color: hsl(0, 0%, 40%);
+}
+#polProfInnerContent .better-maps-container {
+    border-color: hsl(0, 0%, 40%);
+}
+.bm-precinct-path {
+    stroke: hsla(0, 0%, 100%, 0.9) !important;
+}
+.bm-precinct-map .county-hover {
+    stroke: hsl(0, 0%, 93%) !important;
+}
+.bm-precinct-map .precinct-hover {
+    stroke: hsl(0, 0%, 93%) !important;
+}
+.bm-precinct-unmatched {
+    fill: hsl(0, 0%, 45%) !important;
+}
+#bm-precinct-county-title {
+    border-left-color: hsl(205, 82%, 46%);
+    background: hsla(0, 0%, 6%, 0.96);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    color: hsl(0, 0%, 93%);
+}
+#bm-precinct-status {
+    border-color: hsl(0, 0%, 40%);
+    background: hsla(0, 0%, 6%, 0.96);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    color: hsl(0, 0%, 93%);
+}
+#bm-precinct-status.error {
+    border-color: hsl(0, 69%, 36%);
+    color: hsl(0, 78%, 61%);
+}
+#bm-precinct-tooltip {
+    border-color: hsl(0, 0%, 40%);
+    background: hsla(0, 0%, 6%, 0.99);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.34);
+    color: hsl(0, 0%, 93%);
+}
+.bm-precinct-table-row {
+    border-bottom-color: hsl(0, 0%, 40%);
+}
+.bm-precinct-table-party {
+    color: hsl(0, 0%, 100%);
+}
+.bm-party-bg-D {
+    background: hsl(204, 81%, 45%);
+}
+.bm-party-bg-R {
+    background: hsl(358, 78%, 53%);
+}
+.bm-party-bg-I {
+    background: hsl(0, 0%, 26%);
+}
+.bm-precinct-party {
+    background: hsl(0, 0%, 26%);
+}
+.bm-precinct-party.bm-party-D {
+    background: hsl(204, 73%, 47%);
+}
+.bm-precinct-party.bm-party-R {
+    background: hsl(2, 79%, 54%);
+}
+.bm-precinct-party.bm-party-I {
+    background: hsl(0, 0%, 26%);
+}
+.bm-turnout-submode-button {
+    border-color: hsl(0, 0%, 40%);
+    background: hsl(0, 0%, 10%);
+    box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.35);
+    color: hsl(0, 0%, 93%);
+}
+.bm-turnout-submode-button.bm-turnout-submode-active {
+    border-color: hsl(0, 0%, 40%) !important;
+    background: hsl(0, 0%, 20%) !important;
+    box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.35) !important;
+}
+#bm-statewide-turnout-legend {
+    border-color: hsla(205, 10%, 40%, 0.55);
+    background: hsla(200, 18%, 14%, 0.94);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+}
+.bm-turnout-legend-title {
+    color: hsl(204, 22%, 56%);
+}
+.bm-turnout-legend-labels {
+    color: hsl(208, 29%, 55%);
+}
+#bm-statewide-turnout-legend.current .bm-turnout-legend-gradient {
+    background: linear-gradient(90deg, hsl(11, 71%, 33%) 0%, hsl(16, 86%, 54%) 28%, hsl(30, 88%, 56%) 52%, hsl(104, 49%, 45%) 76%, hsl(138, 76%, 31%) 100%);
+}
+#bm-statewide-turnout-legend.comparison .bm-turnout-legend-gradient {
+    background: linear-gradient(90deg, hsl(11, 71%, 33%) 0%, hsl(14, 83%, 57%) 26%, hsl(27, 50%, 17%) 50%, hsl(124, 41%, 53%) 76%, hsl(138, 76%, 31%) 100%);
+}
+#bm-statewide-turnout-tooltip {
+    border-top-color: var(--bm-turnout-colour, hsl(135, 65%, 25%));
+    background: hsl(0, 0%, 6%);
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.3);
+    color: hsl(0, 0%, 93%);
+}
+.bm-turnout-tooltip-state {
+    border-bottom-color: hsl(0, 0%, 40%);
+}
+.bm-turnout-tooltip-change.positive {
+    color: hsl(138, 76%, 61%);
+}
+.bm-turnout-tooltip-change.negative {
+    color: hsl(11, 71%, 63%);
+}
+.bm-turnout-tooltip-empty {
+    color: hsl(207, 12%, 67%);
+}
+#bm-turnout-no-history {
+    border-top-color: hsl(206, 14%, 40%);
+    background: hsla(0, 0%, 6%, 0.96);
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.25);
+    color: hsl(203, 23%, 55%);
+}
+#bm-senate-banner,
+#bm-house-banner {
+    color: hsl(0, 0%, 100%);
+}
+.bm-control-banner-label {
+    background: hsl(50, 100%, 52%);
+    color: #111;
+}
+.bm-control-banner-party {
+    color: hsl(0, 0%, 100%);
+}
+#bm-senate-banner.senate-control-r .bm-control-banner-capitol,
+#bm-senate-banner.senate-control-r .bm-control-banner-party,
+#bm-house-banner.house-control-r .bm-control-banner-capitol,
+#bm-house-banner.house-control-r .bm-control-banner-party {
+    background-color: hsl(0, 73%, 51%);
+}
+#bm-senate-banner.senate-control-d .bm-control-banner-capitol,
+#bm-senate-banner.senate-control-d .bm-control-banner-party,
+#bm-house-banner.house-control-d .bm-control-banner-capitol,
+#bm-house-banner.house-control-d .bm-control-banner-party {
+    background-color: hsl(205, 82%, 46%);
+}
+#bm-senate-banner.senate-control-t .bm-control-banner-capitol,
+#bm-senate-banner.senate-control-t .bm-control-banner-party,
+#bm-house-banner.house-control-t .bm-control-banner-capitol,
+#bm-house-banner.house-control-t .bm-control-banner-party {
+    background-color: hsl(0, 0%, 40%);
+}
+#bm-president-elect-banner {
+    color: hsl(0, 0%, 100%);
+}
+.bm-president-elect-label {
+    background: hsl(50, 100%, 52%);
+    color: #111;
+}
+#better-maps-tooltip {
+    border-color: hsl(0, 0%, 40%);
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+}
+#better-maps-tooltip-win-line {
+    background: hsl(0, 0%, 20%);
+}
+.bm-polls-closing-card {
+    color: #111;
+    background: hsl(50, 100%, 52%);
+    border-color: hsl(48, 100%, 42%);
+}
+.bm-polls-closing-time {
+    background: hsl(0, 0%, 6%);
+    color: hsl(0, 0%, 100%);
+}
+.bm-table-results {
+    color: hsl(0, 0%, 100%);
+}
+.bm-primary-stack .bm-primary-section {
+    border-color: hsl(0, 0%, 40%);
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+}
+.bm-primary-section-title {
+    color: hsl(0, 0%, 100%);
+}
+.bm-primary-section-title-d {
+    background-color: hsl(205, 97%, 46%);
+}
+.bm-primary-section-title-r {
+    background-color: hsl(0, 73%, 51%);
+}
+.bm-primary-winner-badge {
+    background-color: hsl(50, 100%, 52%) !important;
+    color: #111;
+}
+.bm-total-reported-row td {
+    border-top-color: hsl(0, 0%, 40%);
+}
+.bm-total-reported-label {
+    color: hsl(0, 0%, 100%);
+}
+.bm-total-reported-value {
+    color: hsl(0, 0%, 100%);
+}
+.bm-total-reported-seats {
+    color: hsl(0, 0%, 100%);
+}
+.letter-party-r {
+    background-color: hsl(0, 73%, 51%) !important;
+    color: hsl(0, 0%, 100%);
+}
+.letter-party-d {
+    background-color: hsl(205, 97%, 46%) !important;
+    color: hsl(0, 0%, 100%);
+}
+.letter-party-i {
+    background-color: #7A7A7A !important;
+    color: hsl(0, 0%, 100%);
+}
+td.winner-r {
+    background-color: hsl(0, 73%, 51%);
+    color: hsl(0, 0%, 100%);
+}
+td.winner-d {
+    background-color: hsl(205, 97%, 46%);
+    color: hsl(0, 0%, 100%);
+}
+td.winner-id {
+    background-color: hsl(211, 100%, 14%);
+    color: hsl(0, 0%, 93%);
+}
+td.winner-ir {
+    background-color: hsl(0, 100%, 14%);
+    color: hsl(0, 0%, 93%);
+}
+td.winner-i {
+    background-color: hsl(0, 0%, 26%);
+    color: hsl(0, 0%, 100%);
+}
+.bm-primary-vote-shade {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+}
+.bm-candidate-avatar {
+    box-shadow: inset 0 0 0 2px var(--bm-candidate-avatar-stroke, transparent);
+}
+.winner-icon {
+    background-color: hsl(50, 100%, 52%) !important;
+    stroke: #2A2A2A;
+}
+.bm-total-reported-electoral-votes {
+    border-top-color: hsl(0, 0%, 40%);
+}
+.bm-house-seat-delta-gain {
+    color: hsl(142, 86%, 55%);
+    background: hsl(138, 44%, 19%);
+}
+.bm-house-seat-delta-loss {
+    color: hsl(354, 80%, 64%);
+    background: hsl(352, 59%, 18%);
+}
+.bm-house-seat-delta-even {
+    color: hsl(0, 0%, 75%);
+    background: hsl(0, 0%, 12%);
+}
+.pct-delta-badge {
+    color: hsl(0, 0%, 100%);
+}
+.pct-delta-sign::before,
+.pct-delta-sign::after {
+    background: hsl(0, 0%, 100%);
+}
+.pct-delta-r {
+    background-color: hsl(0, 73%, 51%);
+}
+.pct-delta-d {
+    background-color: hsl(205, 97%, 46%);
+}
+.pct-delta-i {
+    background-color: #7A7A7A;
+}
+.bm-rcv-pct-delta-gain {
+    color: hsl(148, 42%, 66%);
+}
+.bm-rcv-pct-delta-loss {
+    color: hsl(0, 38%, 51%);
+}
+.bm-rcv-pct-delta-even {
+    color: hsl(0, 0%, 55%);
+}
+.state-info .state-name {
+    color: hsl(0, 0%, 100%);
+}
+.state-info .state-electors {
+    color: hsl(0, 0%, 100%);
+}
+.state-info .state-reporting {
+    color: hsl(0, 0%, 100%);
+}
+#better-maps-tooltip-seatgain {
+    background-color: hsl(0, 0%, 0%);
+    color: hsl(0, 0%, 100%);
+}
+.seat-gain-badge {
+    background-color: hsl(0, 0%, 0%);
+}
+#better-maps-tooltip-projectedwinner {
+    background-color: hsl(50, 100%, 52%) !important;
+    color: #111;
+}
+.flipProjectedWinner {
+    background-color: hsl(0, 0%, 0%);
+    color: hsl(0, 0%, 100%);
+}
+.winner-iconFLIP {
+    background-color: hsl(0, 0%, 0%);
+    stroke: hsl(0, 0%, 100%);
+}
+.battlegroundState {
+    color: hsl(0, 0%, 100%);
+    border-color: hsl(50, 100%, 53%);
+    background-color: hsl(49, 92%, 23%);
+}
+#better-maps-tooltip-earlycall {
+    background-color: hsl(50, 100%, 52%);
+    color: #111;
+}
+#better-maps-tooltip-closecall {
+    background-color: hsl(50, 100%, 52%);
+    color: #111;
+}
+#better-maps-tooltip-runoff {
+    background-color: hsl(50, 100%, 52%);
+    color: #111;
+}
+#better-maps-tooltip-turnout .bm-turnout-office {
+    color: hsl(0, 0%, 100%);
+}
+.bm-expected {
+    background: hsl(0, 0%, 6%);
+    border-color: hsl(0, 0%, 40%);
+}
+.bm-expected .bx-title {
+    background: hsl(0, 0%, 7%);
+    color: hsl(0, 0%, 100%);
+}
+.val-expected {
+    color: hsl(0, 0%, 100%);
+}
+.bx-sub {
+    color: hsl(0, 0%, 100%);
+}
+.bm-bar {
+    background: hsl(0, 0%, 26%) !important;
+}
+.bm-fill {
+    background: hsl(48, 100%, 48%);
+}
+.bm-pointer {
+    background: hsl(0, 0%, 13%);
+}
+.bm-box {
+    background: hsl(0, 0%, 21%);
+}
+.bm-remaining {
+    border-color: hsl(0, 0%, 40%);
+}
+.bm-reported {
+    border-color: hsl(50, 100%, 52%);
+}
+.val-remaining,
+.val-reported {
+    color: hsl(0, 0%, 100%);
+}
+.label-remaining,
+.label-reported {
+    color: hsl(0, 0%, 58%);
+}
+#bm-margin-through-night {
+    color: hsl(0, 0%, 93%);
+}
+.bm-margin-night-title {
+    color: hsl(213, 4%, 55%);
+}
+.bm-chance-night-title {
+    color: hsl(213, 4%, 55%);
+}
+.bm-margin-night-card {
+    background: hsl(204, 29%, 14%);
+    border-color: hsl(207, 13%, 40%);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.bm-margin-grid {
+    stroke: hsl(207, 16%, 86%);
+}
+.bm-margin-even-line {
+    stroke: hsl(205, 10%, 64%);
+}
+.bm-margin-axis-label,
+.bm-margin-even-label {
+    fill: hsl(210, 4%, 45%);
+}
+.bm-margin-even-label {
+    fill: hsl(210, 16%, 15%);
+}
+.bm-margin-night-latest {
+    border-top-color: hsl(207, 11%, 40%);
+}
+.bm-margin-night-empty {
+    background: hsl(204, 29%, 14%);
+    border-color: hsl(207, 13%, 40%);
+    color: hsl(210, 7%, 55%);
+}
+.bm-chance-card {
+    background: hsl(204, 29%, 14%);
+    border-color: hsl(207, 13%, 40%);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.13);
+}
+.bm-chance-outer {
+    stroke: hsla(222, 47%, 55%, 0.09);
+}
+.bm-chance-segment {
+    stroke: hsl(0, 0%, 100%);
+}
+.bm-chance-segment-label {
+    fill: hsla(222, 47%, 11%, 0.56);
+}
+.bm-chance-pivot {
+    stroke: hsl(0, 0%, 100%);
+}
+.bm-chance-percent {
+    color: hsl(208, 6%, 57%);
+}
+.bm-chance-matchup {
+    color: hsl(208, 8%, 66%);
+}
+.bm-chance-empty {
+    color: hsl(210, 7%, 55%);
+}
+#bm-margin-through-night-tooltip {
+    background: hsl(0, 0%, 14%);
+    border-color: hsla(0, 0%, 100%, 0.14);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5);
+    color: hsl(0, 0%, 90%);
+}
+.bm-margin-tooltip-pin {
+    background: hsl(0, 0%, 14%);
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.5);
+}
+.bm-margin-tooltip-head strong {
+    color: hsl(0, 0%, 96%);
+}
+.bm-margin-tooltip-divider {
+    background: hsl(207, 18%, 20%);
+}
+.bm-margin-tooltip-swatch {
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+}
+.bm-margin-tooltip-margin {
+    border-top-color: hsla(222, 47%, 11%, 0.1);
+}
+#bm-rcv-results-button {
+    color: hsl(0, 0%, 100%);
+    background: hsl(221, 39%, 11%);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+#bm-rcv-results-overlay {
+    background: hsla(213, 58%, 7%, 0.72);
+}
+.bm-rcv-results-modal {
+    background: hsl(200, 16%, 14%);
+    border-color: hsl(208, 51%, 15%);
+    box-shadow: 0 20px 55px rgba(0, 0, 0, 0.42);
+}
+.bm-rcv-results-modal > header {
+    color: hsl(0, 0%, 100%);
+    background: linear-gradient(100deg, hsl(215, 69%, 27%), hsl(351, 91%, 29%));
+}
+.bm-rcv-close {
+    color: hsl(0, 0%, 100%);
+    border-color: hsl(0, 0%, 40%);
+}
+.bm-rcv-round {
+    background: hsl(0, 0%, 6%);
+    border-color: hsl(205, 17%, 77%);
+    border-top-color: hsl(208, 33%, 24%);
+}
+.bm-rcv-round h4 {
+    color: hsl(207, 17%, 63%);
+}
+.bm-rcv-candidate-row {
+    border-bottom-color: hsl(206, 14%, 40%);
+}
+.bm-rcv-total-row {
+    border-top-color: hsl(207, 12%, 40%);
+}
+.bm-rcv-transfer-summary span {
+    background: hsl(206, 26%, 14%);
+    border-color: hsl(208, 17%, 85%);
+}
+
+.better-maps-container {
+    background: linear-gradient(to bottom, hsl(0, 0%, 30%), hsl(0, 0%, 20%));
 }
 #dc-state-path,#dc-state-path-live {
-   stroke: hsl(0, 0%, 20%);
-   stroke-width: 1px;
+    stroke: hsl(0, 0%, 95%);
+    stroke-width: 1px;
+}
+.better-maps-state-path {
+    stroke: hsl(0, 0%, 100%) !important;
+    stroke-width: 1px;
 }
 .better-maps-state-path:hover {
-   stroke: hsl(0, 0%, 0%) !important;
-   stroke-width: 1px;
+    stroke: hsl(0, 0%, 100%) !important;
+    stroke-width: 2px;
 }
-#better-maps-tooltip hr {
-   width: calc(100% - 20px);
-   margin-top: 5px;
-   margin-bottom: 5px;
-   border: 0px solid hsl(0, 0%, 60%);
-   border-bottom-width: 1px;
+#better-maps-tooltip {
+    background: #292929;
+    color: hsl(0, 0%, 80%);
+}
+#better-maps-tooltip.bm-detached-primary-tooltip {
+    background: transparent;
+}
+#better-maps-tooltip.bm-detached-primary-tooltip .bm-primary-section {
+    background: #292929;
 }
 #better-maps-tooltip-reporting {
-   color: hsl(0, 0%, 60%);
+    color: hsl(0, 0%, 60%);
 }

@@ -1,4 +1,561 @@
-﻿.better-maps-container {
+:root {
+    --bm-map-pending-fill: #eeeeee;
+}
+.better-maps-container {
+    border-color: hsl(0, 0%, 10%);
+}
+.bm-house-district-grid-host {
+    border-color: hsl(0, 0%, 15%);
+    background: linear-gradient(to bottom, #4c4c4c, #b8b8b8);
+}
+.bm-house-district-grid {
+    color: #fff;
+}
+.bm-house-district-hex-shape,
+.bm-house-state-district-shape {
+    stroke: rgba(245, 248, 250, 0.92);
+}
+.bm-house-district-hex-label {
+    fill: #fff;
+}
+#bm-house-politician-tooltip {
+    border-color: #17202a;
+    border-top-color: var(--bm-house-politician-party-color, #777);
+    background: #f7f7f7;
+    box-shadow: 0 5px 16px rgba(0,0,0,0.28);
+    color: #111;
+}
+.bm-house-district-hex:hover .bm-house-district-hex-shape,
+.bm-house-district-hex:focus-visible .bm-house-district-hex-shape,
+.bm-house-state-district:hover .bm-house-state-district-shape,
+.bm-house-state-district:focus-visible .bm-house-state-district-shape {
+    stroke: #fff;
+}
+#bm-house-district-return {
+    border-color: #333;
+    color: #111;
+    background: linear-gradient(to bottom, #f4f4f4, #d4d4d4);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+#bm-house-district-return:hover {
+    background: linear-gradient(to bottom, #fff, #dedede);
+}
+.bm-house-district-mode-button {
+    border-color: #333;
+    color: #111;
+    background: linear-gradient(to bottom, #f4f4f4, #d4d4d4);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.bm-house-district-mode-button.active {
+    border-color: #111;
+    background: linear-gradient(to bottom, #e5e5e5, #c7c7c7);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.bm-house-district-mode-button:hover {
+    background: linear-gradient(to bottom, #fff, #dedede);
+}
+.bm-house-district-zoom-button {
+    border-color: #333;
+    color: #111;
+    background: linear-gradient(to bottom, #f4f4f4, #d4d4d4);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.bm-house-district-zoom-button:hover:not(:disabled) {
+    background: linear-gradient(to bottom, #fff, #dedede);
+}
+#eSimMapDivRel .better-maps-container,
+#eSimMapDiv .better-maps-container {
+    border-color: hsl(0, 0%, 20%);
+}
+#polProfInnerContent .better-maps-container {
+    border-color: hsl(0, 0%, 20%);
+}
+.bm-precinct-path {
+    stroke: rgba(255, 255, 255, 0.9) !important;
+}
+.bm-precinct-map .county-hover {
+    stroke: #111111 !important;
+}
+.bm-precinct-map .precinct-hover {
+    stroke: #111111 !important;
+}
+.bm-precinct-unmatched {
+    fill: #d2d2d2 !important;
+}
+#bm-precinct-county-title {
+    border-left-color: hsl(205, 82%, 46%);
+    background: rgba(245, 245, 245, 0.96);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    color: #111111;
+}
+#bm-precinct-status {
+    border-color: #333333;
+    background: rgba(245, 245, 245, 0.96);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    color: #111111;
+}
+#bm-precinct-status.error {
+    border-color: #9b1c1c;
+    color: #8b1111;
+}
+#bm-precinct-tooltip {
+    border-color: #333333;
+    background: rgba(245, 245, 245, 0.99);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.34);
+    color: #111111;
+}
+.bm-precinct-table-row {
+    border-bottom-color: #cccccc;
+}
+.bm-precinct-table-party {
+    color: #ffffff;
+}
+.bm-party-bg-D {
+    background: #1687d2;
+}
+.bm-party-bg-R {
+    background: #e52b30;
+}
+.bm-party-bg-I {
+    background: #888888;
+}
+.bm-precinct-party {
+    background: #777777;
+}
+.bm-precinct-party.bm-party-D {
+    background: #208bd1;
+}
+.bm-precinct-party.bm-party-R {
+    background: #e6322b;
+}
+.bm-precinct-party.bm-party-I {
+    background: #777777;
+}
+.bm-turnout-submode-button {
+    border-color: hsl(0, 0%, 45%);
+    background: hsl(0, 0%, 90%);
+    box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.35);
+    color: #111111;
+}
+.bm-turnout-submode-button.bm-turnout-submode-active {
+    border-color: #111111 !important;
+    background: hsl(0, 0%, 80%) !important;
+    box-shadow: 1px 1px 2px rgba(0, 0, 0, 0.35) !important;
+}
+#bm-statewide-turnout-legend {
+    border-color: rgba(73, 83, 90, 0.55);
+    background: rgba(245, 247, 248, 0.94);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.18);
+}
+.bm-turnout-legend-title {
+    color: #344652;
+}
+.bm-turnout-legend-labels {
+    color: #17212a;
+}
+#bm-statewide-turnout-legend.current .bm-turnout-legend-gradient {
+    background: linear-gradient(90deg, #8f2d18 0%, #ef5b25 28%, #f28e2b 52%, #58a93a 76%, #138a36 100%);
+}
+#bm-statewide-turnout-legend.comparison .bm-turnout-legend-gradient {
+    background: linear-gradient(90deg, #8f2d18 0%, #ed6338 26%, #f4e8de 50%, #55b85b 76%, #138a36 100%);
+}
+#bm-statewide-turnout-tooltip {
+    border-top-color: var(--bm-turnout-colour, #176b2c);
+    background: #f7f7f7;
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.3);
+    color: #111111;
+}
+.bm-turnout-tooltip-state {
+    border-bottom-color: #c8c8c8;
+}
+.bm-turnout-tooltip-change.positive {
+    color: #138a36;
+}
+.bm-turnout-tooltip-change.negative {
+    color: #8f2d18;
+}
+.bm-turnout-tooltip-empty {
+    color: #4a555e;
+}
+#bm-turnout-no-history {
+    border-top-color: #596975;
+    background: rgba(247, 247, 247, 0.96);
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.25);
+    color: #26343d;
+}
+#bm-senate-banner,
+#bm-house-banner {
+    color: #fff;
+}
+.bm-control-banner-label {
+    background: #FFD60C;
+    color: #111;
+}
+.bm-control-banner-party {
+    color: #fff;
+}
+#bm-senate-banner.senate-control-r .bm-control-banner-capitol,
+#bm-senate-banner.senate-control-r .bm-control-banner-party,
+#bm-house-banner.house-control-r .bm-control-banner-capitol,
+#bm-house-banner.house-control-r .bm-control-banner-party {
+    background-color: hsl(0, 73%, 51%);
+}
+#bm-senate-banner.senate-control-d .bm-control-banner-capitol,
+#bm-senate-banner.senate-control-d .bm-control-banner-party,
+#bm-house-banner.house-control-d .bm-control-banner-capitol,
+#bm-house-banner.house-control-d .bm-control-banner-party {
+    background-color: hsl(205, 82%, 46%);
+}
+#bm-senate-banner.senate-control-t .bm-control-banner-capitol,
+#bm-senate-banner.senate-control-t .bm-control-banner-party,
+#bm-house-banner.house-control-t .bm-control-banner-capitol,
+#bm-house-banner.house-control-t .bm-control-banner-party {
+    background-color: #666;
+}
+#bm-president-elect-banner {
+    color: #fff;
+}
+.bm-president-elect-label {
+    background: #FFD60C;
+    color: #111;
+}
+#better-maps-tooltip {
+    border-color: hsl(0, 0%, 15%);
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+}
+#better-maps-tooltip-win-line {
+    background: #cccccc;
+}
+.bm-polls-closing-card {
+    color: #000;
+    background: #FFD60C;
+    border-color: #d4a900;
+}
+.bm-polls-closing-time {
+    background: #f2f2f2;
+}
+.bm-table-results {
+    color: #000;
+}
+.bm-primary-stack .bm-primary-section {
+    border-color: hsl(0, 0%, 15%);
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+}
+.bm-primary-section-title {
+    color: #fff;
+}
+.bm-primary-section-title-d {
+    background-color: #0487E6;
+}
+.bm-primary-section-title-r {
+    background-color: #DD2929;
+}
+.bm-primary-winner-badge {
+    background-color: #ffd60c !important;
+    color: #000;
+}
+.bm-total-reported-row td {
+    border-top-color: #b8b8b8;
+}
+.bm-total-reported-label {
+    color: #000;
+}
+.bm-total-reported-value {
+    color: #000;
+}
+.bm-total-reported-seats {
+    color: #000;
+}
+.letter-party-r {
+    background-color: #DD2929 !important;
+    color: #fff;
+}
+.letter-party-d {
+    background-color: #0487E6 !important;
+    color: #fff;
+}
+.letter-party-i {
+    background-color: #7A7A7A !important;
+    color: #fff;
+}
+td.winner-r {
+    background-color: #DD2929;
+    color: #fff;
+}
+td.winner-d {
+    background-color: #0487E6;
+    color: #fff;
+}
+td.winner-id {
+    background-color: #E6F2FF;
+    color: #111;
+}
+td.winner-ir {
+    background-color: #FFF5F5;
+    color: #111;
+}
+td.winner-i {
+    background-color: #7A7A7A;
+    color: #fff;
+}
+.bm-primary-vote-shade {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+}
+.bm-candidate-avatar {
+    box-shadow: inset 0 0 0 2px var(--bm-candidate-avatar-stroke, transparent);
+}
+.winner-icon {
+    background-color: #ffd60c !important;
+    stroke: #2A2A2A;
+}
+.bm-total-reported-electoral-votes {
+    border-top-color: #b8b8b8;
+}
+.bm-house-seat-delta-gain {
+    color: #075b26;
+    background: #d8f0df;
+}
+.bm-house-seat-delta-loss {
+    color: #9b111e;
+    background: #f5d8dc;
+}
+.bm-house-seat-delta-even {
+    color: #3f3f3f;
+    background: #e1e1e1;
+}
+.pct-delta-badge {
+    color: #fff;
+}
+.pct-delta-sign::before,
+.pct-delta-sign::after {
+    background: #fff;
+}
+.pct-delta-r {
+    background-color: #DD2929;
+}
+.pct-delta-d {
+    background-color: #0487E6;
+}
+.pct-delta-i {
+    background-color: #7A7A7A;
+}
+.bm-rcv-pct-delta-gain {
+    color: #35835a;
+}
+.bm-rcv-pct-delta-loss {
+    color: #b25252;
+}
+.bm-rcv-pct-delta-even {
+    color: #737373;
+}
+.state-info .state-name {
+    color: black;
+}
+.state-info .state-electors {
+    color: black;
+}
+.state-info .state-reporting {
+    color: black;
+}
+#better-maps-tooltip-seatgain {
+    background-color: #000000;
+    color:white;
+}
+.seat-gain-badge {
+    background-color: black;
+}
+#better-maps-tooltip-projectedwinner {
+    background-color: #ffd60c !important;
+}
+.flipProjectedWinner {
+    background-color: black;
+    color: white;
+}
+.winner-iconFLIP {
+    background-color: black;
+    stroke: white;
+}
+.battlegroundState {
+    color: #2a2a2a;
+    border-color: #ffd60f;
+    background-color: #fcefb3;
+}
+#better-maps-tooltip-earlycall {
+    background-color: #FFD60C;
+}
+#better-maps-tooltip-closecall {
+    background-color: #FFD60C;
+}
+#better-maps-tooltip-runoff {
+    background-color: #FFD60C;
+}
+#better-maps-tooltip-turnout .bm-turnout-office {
+    color: black;
+}
+.bm-expected {
+    background:#fff;
+    border-color: #d9d9d9;
+}
+.bm-expected .bx-title {
+    background:#111;
+    color:#fff;
+}
+.val-expected {
+    color:#000;
+}
+.bx-sub {
+    color:#000;
+}
+.bm-bar {
+    background: #a0a0a0 !important;
+}
+.bm-fill {
+    background: #f5c400;
+}
+.bm-pointer {
+    background: #222;
+}
+.bm-box {
+    background:#c9c9c9;
+}
+.bm-remaining {
+    border-color:#a0a0a0;
+}
+.bm-reported {
+    border-color:#FFD60C;
+}
+.val-remaining,
+.val-reported {
+    color:#000;
+}
+.label-remaining,
+.label-reported {
+    color:#939393;
+}
+#bm-margin-through-night {
+    color: #111;
+}
+.bm-margin-night-title {
+    color: #6f7378;
+}
+.bm-chance-night-title {
+    color: #6f7378;
+}
+.bm-margin-night-card {
+    background: #f4f7f9;
+    border-color: #cfd5da;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.bm-margin-grid {
+    stroke: #d7dde2;
+}
+.bm-margin-even-line {
+    stroke: #9aa5ad;
+}
+.bm-margin-axis-label,
+.bm-margin-even-label {
+    fill: #6b7075;
+}
+.bm-margin-even-label {
+    fill: #20262c;
+}
+.bm-margin-night-latest {
+    border-top-color: #c6ccd1;
+}
+.bm-margin-night-empty {
+    background: #f4f7f9;
+    border-color: #cfd5da;
+    color: #6c747c;
+}
+.bm-chance-card {
+    background: #f4f7f9;
+    border-color: #cfd5da;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.13);
+}
+.bm-chance-outer {
+    stroke: rgba(15, 23, 42, 0.09);
+}
+.bm-chance-segment {
+    stroke: #ffffff;
+}
+.bm-chance-segment-label {
+    fill: rgba(15, 23, 42, 0.56);
+}
+.bm-chance-pivot {
+    stroke: #ffffff;
+}
+.bm-chance-percent {
+    color: #666d73;
+}
+.bm-chance-matchup {
+    color: #4f565c;
+}
+.bm-chance-empty {
+    color: #6c747c;
+}
+#bm-margin-through-night-tooltip {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.12);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.2);
+    color: #101820;
+}
+.bm-margin-tooltip-pin {
+    background: #ffffff;
+    box-shadow: 0 2px 7px rgba(15, 23, 42, 0.2);
+}
+.bm-margin-tooltip-head strong {
+    color: #101820;
+}
+.bm-margin-tooltip-divider {
+    background: #dbe1e6;
+}
+.bm-margin-tooltip-swatch {
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+}
+.bm-margin-tooltip-margin {
+    border-top-color: rgba(15, 23, 42, 0.1);
+}
+#bm-rcv-results-button {
+    color: #ffffff;
+    background: #111827;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+#bm-rcv-results-overlay {
+    background: rgba(8, 18, 30, 0.72);
+}
+.bm-rcv-results-modal {
+    background: #f4f6f7;
+    border-color: #13283a;
+    box-shadow: 0 20px 55px rgba(0, 0, 0, 0.42);
+}
+.bm-rcv-results-modal > header {
+    color: #ffffff;
+    background: linear-gradient(100deg, #153c74, #8d071c);
+}
+.bm-rcv-close {
+    color: #ffffff;
+    border-color: #ffffff;
+}
+.bm-rcv-round {
+    background: #ffffff;
+    border-color: #bcc7cf;
+    border-top-color: #283d50;
+}
+.bm-rcv-round h4 {
+    color: #465663;
+}
+.bm-rcv-candidate-row {
+    border-bottom-color: #e2e6e9;
+}
+.bm-rcv-total-row {
+    border-top-color: #aeb8c0;
+}
+.bm-rcv-transfer-summary span {
+    background: #eef2f5;
+    border-color: #d2d9df;
+}
+
+.better-maps-container {
    background: linear-gradient(to bottom, hsl(0, 0%, 30%), hsl(0, 0%, 80%));
 }
 #dc-state-path,#dc-state-path-live {
