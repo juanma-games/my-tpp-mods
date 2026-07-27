@@ -45,7 +45,9 @@
     let houseDistrictGridZoomState = null;
     let houseDistrictGridPanX = 0;
     let houseDistrictGridPanY = 0;
+    let activeHouseDistrictDragCleanup = null;
     let rcvResultsModal = null;
+    let rcvResultsEscapeListener = null;
     let activePrimaryCountyParty = null;
     let activePrimaryCountyElectionType = null;
     const MAP_MODES = Object.freeze({
@@ -75,6 +77,7 @@
     const statewideTurnoutMapControllers = new WeakMap();
     const statewideShiftArrowPoints = new WeakMap();
     const electionNightMapButtonObservers = new Map();
+    const statewideTurnoutDocumentListenerRemovers = [];
     let statewideTurnoutDocumentControllerInstalled = false;
     let statewideTurnoutRenderToken = 0;
     let suppressElectionNightProjectObserverUntil = 0;
@@ -112,6 +115,21 @@
     let marginThroughNightUpdateQueued = false;
     let marginThroughNightUpdateTimer = null;
     let marginThroughNightLastUpdateAt = 0;
+    let modInitialized = false;
+    let modShuttingDown = false;
+    let electionNightThemeClickTimer = null;
+    let msnbcElectionButtonVisibilityTimer = null;
+    let msnbcElectionButtonInstallTimer = null;
+    let independentPollObserverInstallTimer = null;
+    let presidentialPrimaryResetTimer = null;
+    const independentPollObserverFollowupTimers = new Set();
+    const electionNightSkipEndRefreshTimers = new Set();
+    const managedPostHooks = [];
+    const registerManagedPostHook = (functionName, callback) => {
+        const index = Executive.functions.registerPostHook(functionName, callback);
+        managedPostHooks.push({ functionName, index });
+        return index;
+    };
     const stateNameToCode = {
         "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
         "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Florida": "FL", "Georgia": "GA",
@@ -731,8 +749,14 @@
         };
         ["pointerdown", "mousedown", "mouseup", "click", "dblclick"].forEach(eventName => {
             window.addEventListener(eventName, blockTurnoutStateNavigation, true);
+            statewideTurnoutDocumentListenerRemovers.push(() => {
+                window.removeEventListener(eventName, blockTurnoutStateNavigation, true);
+            });
         });
         window.addEventListener("mousemove", updateTurnoutHover, true);
+        statewideTurnoutDocumentListenerRemovers.push(() => {
+            window.removeEventListener("mousemove", updateTurnoutHover, true);
+        });
     };
     const installStatewideTurnoutMapController = (svgMap, electionType) => {
         installStatewideTurnoutDocumentController();
@@ -1509,15 +1533,15 @@
                         }
                     }
                 } else if (electionType === "usSenatePol") {
-                    if(currentDistrict.senior.extendedAttribs.party === currentDistrict.junior.extendedAttribs.party){
+                    const seniorAcronym = (currentDistrict.senior.extendedAttribs.party === "Independent")
+                        ? ("I" + currentDistrict.senior.caucusParty.charAt(0))
+                        : currentDistrict.senior.caucusParty.charAt(0);
+                    const juniorAcronym = (currentDistrict.junior.extendedAttribs.party === "Independent")
+                        ? ("I" + currentDistrict.junior.caucusParty.charAt(0))
+                        : currentDistrict.junior.caucusParty.charAt(0);
+                    if(seniorAcronym === juniorAcronym){
                         newColour = stringifyColour(getPoliticianColour(currentDistrict.senior));
                     } else {
-                        const seniorAcronym = (currentDistrict.senior.extendedAttribs.party === "Independent")
-                            ? ("I" + currentDistrict.senior.caucusParty.charAt(0))
-                            : currentDistrict.senior.caucusParty.charAt(0);
-                        const juniorAcronym = (currentDistrict.junior.extendedAttribs.party === "Independent")
-                            ? ("I" + currentDistrict.junior.caucusParty.charAt(0))
-                            : currentDistrict.junior.caucusParty.charAt(0);
                         newColour = `url(#${seniorAcronym}:${juniorAcronym})`;
                     }
                 } else if (electionType === "governorPol") {
@@ -2155,6 +2179,7 @@
         mainPatternElem.setAttribute("width", "10");
         mainPatternElem.setAttribute("height", "10");
         mainPatternElem.setAttribute("patternUnits", "userSpaceOnUse");
+        mainPatternElem.setAttribute("patternTransform", "rotate(45 0 0)");
         const backRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
         backRect.setAttribute("x", "0");
         backRect.setAttribute("y", "0");
@@ -2162,6 +2187,13 @@
         backRect.setAttribute("height", "10");
         backRect.setAttribute("fill", backColour);
         mainPatternElem.appendChild(backRect);
+        const foreRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        foreRect.setAttribute("x", "0");
+        foreRect.setAttribute("y", "0");
+        foreRect.setAttribute("width", "5");
+        foreRect.setAttribute("height", "10");
+        foreRect.setAttribute("fill", foreColour);
+        mainPatternElem.appendChild(foreRect);
         return mainPatternElem;
     };
     const createPartyPattern = (party1, party2) => {
@@ -2838,19 +2870,23 @@
         tooltipDiv.style.display = "none";
         tooltipComponents.properties.visible = false;
         tooltipComponents.properties.targetDistrict = null;
-        setTimeout(() => {
+        if(presidentialPrimaryResetTimer) clearTimeout(presidentialPrimaryResetTimer);
+        presidentialPrimaryResetTimer = setTimeout(() => {
+            presidentialPrimaryResetTimer = null;
+            if(modShuttingDown) return;
             if(typeof lastMapPageRefresh === "function") lastMapPageRefresh();
         }, 0);
+    };
+    const handlePresidentialPrimaryTabClick = event => {
+        const target = event.target instanceof Element
+            ? event.target.closest("#presElectDemPTab, #presElectRepPTab")
+            : null;
+        if(target) resetPresidentialPrimaryCountyView();
     };
     const installPresidentialPrimaryTabReset = () => {
         if(presidentialPrimaryTabResetInstalled || typeof document === "undefined") return;
         presidentialPrimaryTabResetInstalled = true;
-        document.addEventListener("click", event => {
-            const target = event.target instanceof Element
-                ? event.target.closest("#presElectDemPTab, #presElectRepPTab")
-                : null;
-            if(target) resetPresidentialPrimaryCountyView();
-        }, true);
+        document.addEventListener("click", handlePresidentialPrimaryTabClick, true);
     };
     const isEligibleStatewidePrimaryCountyRace = (
         electionType,
@@ -4480,11 +4516,10 @@
         let dragStartPanX = 0;
         let dragStartPanY = 0;
         const finishHouseDistrictDrag = () => {
-            if (!houseDistrictGridDragging) return;
             houseDistrictGridDragging = false;
             stageViewport.classList.remove("is-dragging");
-            document.removeEventListener("mousemove", moveHouseDistrictDrag);
-            document.removeEventListener("mouseup", finishHouseDistrictDrag);
+            activeHouseDistrictDragCleanup?.();
+            activeHouseDistrictDragCleanup = null;
         };
         const moveHouseDistrictDrag = event => {
             if (!houseDistrictGridDragging) return;
@@ -4504,6 +4539,12 @@
             dragStartPanY = houseDistrictGridPanY;
             document.addEventListener("mousemove", moveHouseDistrictDrag);
             document.addEventListener("mouseup", finishHouseDistrictDrag);
+            activeHouseDistrictDragCleanup = () => {
+                document.removeEventListener("mousemove", moveHouseDistrictDrag);
+                document.removeEventListener("mouseup", finishHouseDistrictDrag);
+                stageViewport.classList.remove("is-dragging");
+                houseDistrictGridDragging = false;
+            };
         });
         const gridTopSpace = 86;
         const gridBottomSpace = 12;
@@ -4917,24 +4958,32 @@
             }
         }
     };
+    const scheduleElectionNightSkipEndRefresh = delay => {
+        const timer = setTimeout(() => {
+            electionNightSkipEndRefreshTimers.delete(timer);
+            if(!modShuttingDown) refreshActivePrimaryCountyMap();
+        }, delay);
+        electionNightSkipEndRefreshTimers.add(timer);
+    };
+    const handleElectionNightSkipEndClick = event => {
+        const target = event.target instanceof Element
+            ? event.target.closest("button, input, div, span")
+            : null;
+        const label = String(
+            target?.value
+            || target?.innerText
+            || target?.textContent
+            || ""
+        );
+        if(!/\bSkip to End\b/i.test(label)) return;
+        scheduleElectionNightSkipEndRefresh(80);
+        scheduleElectionNightSkipEndRefresh(350);
+        scheduleElectionNightSkipEndRefresh(900);
+    };
     const installElectionNightSkipEndPrimaryRefresh = () => {
         if(electionNightSkipEndPrimaryRefreshInstalled || typeof document === "undefined") return;
         electionNightSkipEndPrimaryRefreshInstalled = true;
-        document.addEventListener("click", event => {
-            const target = event.target instanceof Element
-                ? event.target.closest("button, input, div, span")
-                : null;
-            const label = String(
-                target?.value
-                || target?.innerText
-                || target?.textContent
-                || ""
-            );
-            if(!/\bSkip to End\b/i.test(label)) return;
-            setTimeout(refreshActivePrimaryCountyMap, 80);
-            setTimeout(refreshActivePrimaryCountyMap, 350);
-            setTimeout(refreshActivePrimaryCountyMap, 900);
-        }, true);
+        document.addEventListener("click", handleElectionNightSkipEndClick, true);
     };
     const removeStateCountyZoom = () => {
         stateCountyZoomController?.destroy?.();
@@ -6348,6 +6397,10 @@
         `;
     };
     const closeRcvResultsModal = () => {
+        if(rcvResultsEscapeListener) {
+            document.removeEventListener("keydown", rcvResultsEscapeListener);
+            rcvResultsEscapeListener = null;
+        }
         if(rcvResultsModal) rcvResultsModal.remove();
         rcvResultsModal = null;
         const resultsButton = document.getElementById("bm-rcv-results-button");
@@ -6402,11 +6455,11 @@
         overlay.addEventListener("click", event => {
             if(event.target === overlay || event.target.closest(".bm-rcv-close")) closeRcvResultsModal();
         });
-        document.addEventListener("keydown", function closeOnEscape(event) {
+        rcvResultsEscapeListener = event => {
             if(event.key !== "Escape" || !rcvResultsModal) return;
-            document.removeEventListener("keydown", closeOnEscape);
             closeRcvResultsModal();
-        });
+        };
+        document.addEventListener("keydown", rcvResultsEscapeListener);
         document.body.appendChild(overlay);
         rcvResultsModal = overlay;
         const resultsButton = document.getElementById("bm-rcv-results-button");
@@ -6928,19 +6981,20 @@
             electionNightThemePlayPending = false;
         }
     };
+    const handleElectionNightThemeClick = () => {
+        if(modShuttingDown) return;
+        if(electionNightThemeClickTimer) clearTimeout(electionNightThemeClickTimer);
+        electionNightThemeClickTimer = setTimeout(() => {
+            electionNightThemeClickTimer = null;
+            if(!modShuttingDown) syncElectionNightTheme();
+        }, 0);
+    };
     const installElectionNightTheme = () => {
-        if(electionNightThemeMonitor || typeof Audio !== "function") return;
-        electionNightThemeMonitor = setInterval(syncElectionNightTheme, 350);
-        document.addEventListener("click", () => {
-            setTimeout(syncElectionNightTheme, 0);
-        }, true);
-        window.addEventListener("beforeunload", () => {
-            pauseElectionNightTheme({ reset: true });
-            if(electionNightThemeMonitor) {
-                clearInterval(electionNightThemeMonitor);
-                electionNightThemeMonitor = null;
-            }
-        }, { once: true });
+        if(modShuttingDown || electionNightThemeMonitor || typeof Audio !== "function") return;
+        electionNightThemeMonitor = setInterval(() => {
+            if(!modShuttingDown) syncElectionNightTheme();
+        }, 350);
+        document.addEventListener("click", handleElectionNightThemeClick, true);
         syncElectionNightTheme();
     };
     const injectMsnbcElectionPanelStyles = () => {
@@ -8549,7 +8603,24 @@
         const raceConfig = getMarginThroughNightRaceConfig(electionType);
         const raceName = String(stateRace?.district || stateRace?.name || stateRace?.state || stateCode || "").replace(/\s+/g, " ").trim();
         const electionYear = Number(readRuntimeValue("currentYear"));
-        return `${Number.isFinite(electionYear) ? electionYear : "year"}|${raceConfig?.race || electionType}|${String(stateCode || "").toUpperCase()}|${raceName}`;
+        const candidateSignature = Array.isArray(stateRace?.cands)
+            ? stateRace.cands.map((candidate, index) => {
+                const identity = String(
+                    candidate?.id
+                    ?? candidate?.candidateId
+                    ?? candidate?.politicianId
+                    ?? candidate?.polId
+                    ?? candidate?.name
+                    ?? getPanelCandidateName(candidate)
+                    ?? index
+                ).replace(/\s+/g, " ").trim().toLowerCase();
+                const party = normalizePanelPartyCode(
+                    candidate?.party || candidate?.caucus || candidate?.caucusParty
+                ) || "I";
+                return `${identity}:${party}`;
+            }).sort().join(",")
+            : "";
+        return `${Number.isFinite(electionYear) ? electionYear : "year"}|${raceConfig?.race || electionType}|${String(stateCode || "").toUpperCase()}|${raceName}|${candidateSignature}`;
     };
     const getMarginCandidateColour = (candidate, fallbackParty, race = null) => {
         try {
@@ -8753,44 +8824,12 @@
         const stateRace = getMarginThroughNightStateRace(electionType, stateCode);
         return buildMarginThroughNightPoint(electionType, stateRace);
     };
-    const getMarginCandidateHistoryKey = (candidate) => {
-        return `${String(candidate?.party || "").toUpperCase()}|${String(candidate?.name || "").toLowerCase()}`;
-    };
-    const isMarginThroughNightPointCoherent = (point, previousPoint = null) => {
-        if(!previousPoint || !Array.isArray(point?.candidates) || !Array.isArray(previousPoint?.candidates)) return true;
-        const previousByCandidate = new Map(previousPoint.candidates.map(candidate => [
-            getMarginCandidateHistoryKey(candidate),
-            candidate
-        ]));
-        return point.candidates.every(candidate => {
-            const previousCandidate = previousByCandidate.get(getMarginCandidateHistoryKey(candidate));
-            const previousVotes = Number(previousCandidate?.votes);
-            const currentVotes = Number(candidate?.votes) || 0;
-            return !Number.isFinite(previousVotes) || currentVotes >= previousVotes;
-        });
-    };
-    const getPreviousMarginThroughNightPoint = (history, point) => {
-        const reporting = Number(point?.reportingPercent);
-        const previousPoints = history
-            .filter(historyPoint => Number(historyPoint.reportingPercent) < reporting)
-            .sort((a, b) => Number(b.reportingPercent) - Number(a.reportingPercent));
-        return previousPoints[0] || history[history.length - 1] || null;
-    };
-    const normalizeMarginThroughNightPoint = (point, previousPoint = null) => {
-        if(!point || !Array.isArray(point.candidates) || !Array.isArray(previousPoint?.candidates)) return point;
-        const previousByCandidate = new Map(previousPoint.candidates.map(candidate => [
-            getMarginCandidateHistoryKey(candidate),
-            candidate
-        ]));
-        const candidates = point.candidates.map(candidate => {
-            const previousCandidate = previousByCandidate.get(getMarginCandidateHistoryKey(candidate));
-            const previousVotes = Number(previousCandidate?.votes);
-            const currentVotes = Number(candidate?.votes) || 0;
-            return {
-                ...candidate,
-                votes: Number.isFinite(previousVotes) ? Math.max(currentVotes, previousVotes) : currentVotes
-            };
-        });
+    const normalizeMarginThroughNightPoint = (point) => {
+        if(!point || !Array.isArray(point.candidates)) return point;
+        const candidates = point.candidates.map(candidate => ({
+            ...candidate,
+            votes: Math.max(0, Number(candidate?.votes) || 0)
+        }));
         const totalCurrVotes = candidates.reduce((sum, candidate) => sum + (Number(candidate.votes) || 0), 0);
         if(totalCurrVotes <= 0) return point;
         const normalizedCandidates = candidates.map(candidate => ({
@@ -8830,29 +8869,39 @@
     const recordMarginThroughNightPointValue = (point) => {
         if(!point) return null;
         const history = marginThroughNightHistories.get(point.key) || [];
+        const reportingPercent = Number(point.reportingPercent);
+        const nearbyNativePoint = history.find(historyPoint =>
+            historyPoint.voteSource === "native"
+            && Number.isFinite(reportingPercent)
+            && Math.abs(Number(historyPoint.reportingPercent) - reportingPercent) < 1
+        );
+        if(point.voteSource !== "native"
+            && nearbyNativePoint
+            && getMarginThroughNightSourcePriority(nearbyNativePoint) > getMarginThroughNightSourcePriority(point)) {
+            return history;
+        }
+        if(point.voteSource === "native" && Number.isFinite(reportingPercent)) {
+            for(let index = history.length - 1; index >= 0; index--) {
+                const historyPoint = history[index];
+                if(historyPoint.voteSource !== "native"
+                    && Math.abs(Number(historyPoint.reportingPercent) - reportingPercent) < 1) {
+                    history.splice(index, 1);
+                }
+            }
+        }
         const existingPoint = history.find(historyPoint =>
             Number(historyPoint.reportingPercent) === Number(point.reportingPercent)
         );
+        const normalizedPoint = normalizeMarginThroughNightPoint(point);
         if(!existingPoint) {
-            const previousPoint = getPreviousMarginThroughNightPoint(history, point);
-
-            const shouldNormalizePoint = point.voteSource !== "native";
-            const normalizedPoint = shouldNormalizePoint
-                ? normalizeMarginThroughNightPoint(point, previousPoint)
-                : point;
             history.push(normalizedPoint);
             history.sort((a, b) => Number(a.reportingPercent) - Number(b.reportingPercent));
             marginThroughNightHistories.set(point.key, history);
         } else {
             const incomingPriority = getMarginThroughNightSourcePriority(point);
             const existingPriority = getMarginThroughNightSourcePriority(existingPoint);
-            if(incomingPriority > existingPriority || point.voteSource === "native") {
-                Object.assign(existingPoint, point);
-            } else if(incomingPriority === existingPriority) {
-                const replacementPoint = normalizeMarginThroughNightPoint(point, existingPoint);
-                if((Number(replacementPoint.totalCurrVotes) || 0) > (Number(existingPoint.totalCurrVotes) || 0)) {
-                    Object.assign(existingPoint, replacementPoint);
-                }
+            if(incomingPriority >= existingPriority || point.voteSource === "native") {
+                Object.assign(existingPoint, normalizedPoint);
             }
             history.sort((a, b) => Number(a.reportingPercent) - Number(b.reportingPercent));
         }
@@ -13457,8 +13506,13 @@
         );
     };
     const createMsnbcElectionPanelButton = () => {
+        if(modShuttingDown) return;
         if(!document.body) {
-            setTimeout(createMsnbcElectionPanelButton, 100);
+            if(msnbcElectionButtonInstallTimer) clearTimeout(msnbcElectionButtonInstallTimer);
+            msnbcElectionButtonInstallTimer = setTimeout(() => {
+                msnbcElectionButtonInstallTimer = null;
+                createMsnbcElectionPanelButton();
+            }, 100);
             return;
         }
         injectMsnbcElectionPanelStyles();
@@ -13474,10 +13528,15 @@
     };
     const installMsnbcElectionPanel = () => {
         try {
+            if(modShuttingDown) return;
             createMsnbcElectionPanelButton();
             if(msnbcElectionPanelObserver || !document.body) return;
             msnbcElectionPanelObserver = true;
-            setInterval(updateMsnbcElectionButtonVisibility, 1000);
+            if(!msnbcElectionButtonVisibilityTimer) {
+                msnbcElectionButtonVisibilityTimer = setInterval(() => {
+                    if(!modShuttingDown) updateMsnbcElectionButtonVisibility();
+                }, 1000);
+            }
         } catch (error) {
             globalThis.bmMsnbcElectionPanelError = error;
         }
@@ -15323,11 +15382,23 @@
             targetCount: targets.size
         };
     };
+    const scheduleIndependentPollFollowup = delay => {
+        const timer = setTimeout(() => {
+            independentPollObserverFollowupTimers.delete(timer);
+            if(!modShuttingDown) queueIndependentPollDecimalFormatting();
+        }, delay);
+        independentPollObserverFollowupTimers.add(timer);
+    };
     const installIndependentPollObserver = () => {
+        if(modShuttingDown) return;
         installPollAverageCanvasRecorder();
         if(independentPollObserver) return;
         if(!document.body) {
-            setTimeout(installIndependentPollObserver, 100);
+            if(independentPollObserverInstallTimer) clearTimeout(independentPollObserverInstallTimer);
+            independentPollObserverInstallTimer = setTimeout(() => {
+                independentPollObserverInstallTimer = null;
+                installIndependentPollObserver();
+            }, 100);
             return;
         }
         independentPollObserver = new MutationObserver(queueIndependentPollDecimalFormatting);
@@ -15337,12 +15408,126 @@
             characterData: true
         });
         queueIndependentPollDecimalFormatting();
-        setTimeout(queueIndependentPollDecimalFormatting, 250);
-        setTimeout(queueIndependentPollDecimalFormatting, 1000);
-        setTimeout(queueIndependentPollDecimalFormatting, 2000);
-        setTimeout(queueIndependentPollDecimalFormatting, 4000);
+        scheduleIndependentPollFollowup(250);
+        scheduleIndependentPollFollowup(1000);
+        scheduleIndependentPollFollowup(2000);
+        scheduleIndependentPollFollowup(4000);
+    };
+    const handleModPageExit = () => mod.destroy();
+    mod.destroy = () => {
+        if(modShuttingDown) return;
+        modShuttingDown = true;
+        window.removeEventListener("pagehide", handleModPageExit, true);
+        window.removeEventListener("beforeunload", handleModPageExit, true);
+        document.removeEventListener("click", handleElectionNightThemeClick, true);
+        document.removeEventListener("click", handlePresidentialPrimaryTabClick, true);
+        document.removeEventListener("click", handleElectionNightSkipEndClick, true);
+        activeHouseDistrictDragCleanup?.();
+        activeHouseDistrictDragCleanup = null;
+        if(rcvResultsEscapeListener) {
+            document.removeEventListener("keydown", rcvResultsEscapeListener);
+            rcvResultsEscapeListener = null;
+        }
+        statewideTurnoutDocumentListenerRemovers.forEach(removeListener => removeListener());
+        statewideTurnoutDocumentListenerRemovers.length = 0;
+        statewideTurnoutDocumentControllerInstalled = false;
+        presidentialPrimaryTabResetInstalled = false;
+        electionNightSkipEndPrimaryRefreshInstalled = false;
+        if(presidentialPrimaryResetTimer) clearTimeout(presidentialPrimaryResetTimer);
+        if(electionNightThemeClickTimer) clearTimeout(electionNightThemeClickTimer);
+        if(msnbcElectionButtonInstallTimer) clearTimeout(msnbcElectionButtonInstallTimer);
+        if(independentPollObserverInstallTimer) clearTimeout(independentPollObserverInstallTimer);
+        if(marginThroughNightUpdateTimer) clearTimeout(marginThroughNightUpdateTimer);
+        presidentialPrimaryResetTimer = null;
+        electionNightThemeClickTimer = null;
+        msnbcElectionButtonInstallTimer = null;
+        independentPollObserverInstallTimer = null;
+        marginThroughNightUpdateTimer = null;
+        marginThroughNightUpdateQueued = false;
+        independentPollObserverFollowupTimers.forEach(timer => clearTimeout(timer));
+        independentPollObserverFollowupTimers.clear();
+        electionNightSkipEndRefreshTimers.forEach(timer => clearTimeout(timer));
+        electionNightSkipEndRefreshTimers.clear();
+        if(electionNightThemeMonitor) clearInterval(electionNightThemeMonitor);
+        if(msnbcElectionButtonVisibilityTimer) clearInterval(msnbcElectionButtonVisibilityTimer);
+        if(msnbcElectionPanelRefreshTimer) clearInterval(msnbcElectionPanelRefreshTimer);
+        if(msnbcElectionPanelHydrationTimer) clearInterval(msnbcElectionPanelHydrationTimer);
+        if(houseDistrictTooltipRefreshTimer) clearInterval(houseDistrictTooltipRefreshTimer);
+        if(tooltipComponents.pollClosingTimer) clearInterval(tooltipComponents.pollClosingTimer);
+        electionNightThemeMonitor = null;
+        msnbcElectionButtonVisibilityTimer = null;
+        msnbcElectionPanelRefreshTimer = null;
+        msnbcElectionPanelHydrationTimer = null;
+        houseDistrictTooltipRefreshTimer = null;
+        tooltipComponents.pollClosingTimer = null;
+        independentPollObserver?.disconnect();
+        marginThroughNightObserver?.disconnect();
+        independentPollObserver = null;
+        marginThroughNightObserver = null;
+        electionNightMapButtonObservers.forEach(observer => observer?.disconnect?.());
+        electionNightMapButtonObservers.clear();
+        msnbcElectionPanelObserver = null;
+        try {
+            stateCountyZoomController?.destroy?.();
+        } catch(error) {}
+        try {
+            precinctResultsController?.destroy?.();
+        } catch(error) {}
+        try {
+            cityMayoralMap?.destroy?.();
+        } catch(error) {}
+        try {
+            specialElectionNight?.destroy?.();
+        } catch(error) {}
+        try {
+            ballotMeasuresSubmod?.destroy?.();
+        } catch(error) {}
+        stateCountyZoomController = null;
+        precinctResultsController = null;
+        cityMayoralMap = null;
+        specialElectionNight = null;
+        ballotMeasuresSubmod = null;
+        globalThis.bmPrecinctResults = null;
+        globalThis.bmCityMayoralMap = null;
+        pauseElectionNightTheme({ reset: true });
+        if(electionNightThemeAudio) {
+            electionNightThemeAudio.pause();
+            electionNightThemeAudio = null;
+        }
+        electionNightThemePlayPending = false;
+        if(lastUpdateDataHook !== null) {
+            try {
+                Executive.functions.deregisterPostHook("electNightUpdateData", lastUpdateDataHook);
+            } catch(error) {}
+            lastUpdateDataHook = null;
+        }
+        for(let index = managedPostHooks.length - 1; index >= 0; index -= 1) {
+            const hook = managedPostHooks[index];
+            try {
+                Executive.functions.deregisterPostHook(hook.functionName, hook.index);
+            } catch(error) {}
+        }
+        managedPostHooks.length = 0;
+        [
+            "bm-msnbc-election-overlay",
+            "bm-msnbc-poll-overlay",
+            "bm-msnbc-election-btn",
+            "bm-chance-simulations-overlay"
+        ].forEach(id => document.getElementById(id)?.remove());
+        pollAverageTooltip?.remove();
+        marginThroughNightTooltip?.remove();
+        rcvResultsModal?.remove();
+        pollAverageTooltip = null;
+        marginThroughNightTooltip = null;
+        rcvResultsModal = null;
+        modInitialized = false;
     };
     mod.init = () => {
+        if(modInitialized) return;
+        modInitialized = true;
+        modShuttingDown = false;
+        window.addEventListener("pagehide", handleModPageExit, true);
+        window.addEventListener("beforeunload", handleModPageExit, true);
         Executive.styles.registerStyle("styles/general.css");
         Executive.styles.registerStyle("styles/special-election-night.css");
         Executive.styles.registerThemeAwareStyle("styles/light.css", "styles/dark.css");
@@ -15717,23 +15902,25 @@
         });
         createTooltip();
         if (!houseDistrictTooltipRefreshTimer) {
-            houseDistrictTooltipRefreshTimer = setInterval(refreshActiveHouseDistrictTooltip, 500);
+            houseDistrictTooltipRefreshTimer = setInterval(() => {
+                if(!modShuttingDown) refreshActiveHouseDistrictTooltip();
+            }, 500);
         }
         Executive.functions.registerReplacement("electPageMap", newElectPageMap);
         Executive.functions.registerReplacement("electNightMap", newElectNightMap);
         Executive.functions.registerReplacement("eSimUSCanvas", newSimUSCanvas);
         Executive.functions.registerReplacement("summaryNationMap", newSummaryNationMap);
-        Executive.functions.registerPostHook("electNightUSSFunc", createMapChangeObserver("usSenate"));
-        Executive.functions.registerPostHook("electNightUSSFunc", queueMarginThroughNightChartUpdate);
-        Executive.functions.registerPostHook("electNightUSHFunc", createMapChangeObserver("usHouse"));
-        Executive.functions.registerPostHook("electNightUSHFunc", () => {
+        registerManagedPostHook("electNightUSSFunc", createMapChangeObserver("usSenate"));
+        registerManagedPostHook("electNightUSSFunc", queueMarginThroughNightChartUpdate);
+        registerManagedPostHook("electNightUSHFunc", createMapChangeObserver("usHouse"));
+        registerManagedPostHook("electNightUSHFunc", () => {
             refreshHouseBaseTabFromElectionNight({ reason: "house-native-render" });
         });
-        Executive.functions.registerPostHook("electNightGovFunc", createMapChangeObserver("governor"));
-        Executive.functions.registerPostHook("electNightGovFunc", queueMarginThroughNightChartUpdate);
-        Executive.functions.registerPostHook("electNightPresFunc", createMapChangeObserver("president"));
-        Executive.functions.registerPostHook("electNightPresFunc", queueMarginThroughNightChartUpdateBurst);
-        Executive.functions.registerPostHook("electNightUpdateData", () => {
+        registerManagedPostHook("electNightGovFunc", createMapChangeObserver("governor"));
+        registerManagedPostHook("electNightGovFunc", queueMarginThroughNightChartUpdate);
+        registerManagedPostHook("electNightPresFunc", createMapChangeObserver("president"));
+        registerManagedPostHook("electNightPresFunc", queueMarginThroughNightChartUpdateBurst);
+        registerManagedPostHook("electNightUpdateData", () => {
             runWithPreservedMapSelection(() => {
                 hydrateMarginThroughNightBackgroundRaces(false);
                 if(onCountyMap !== true && !isHouseStateDistrictViewActive()) {
@@ -15755,11 +15942,14 @@
             }
         });
         if(config.showPanePartyID === true){
-            Executive.functions.registerPostHook("houseElectPage", addPartyID);
-            Executive.functions.registerPostHook("senateElectPage", addPartyID);
-            Executive.functions.registerPostHook("governorElectPage", addPartyID);
+            registerManagedPostHook("houseElectPage", addPartyID);
+            registerManagedPostHook("senateElectPage", addPartyID);
+            registerManagedPostHook("governorElectPage", addPartyID);
         }
-        Executive.functions.registerPostHook("independentPolls", queueIndependentPollDecimalFormatting);
+        registerManagedPostHook("independentPolls", queueIndependentPollDecimalFormatting);
+        registerManagedPostHook("addIntroMenu", () => {
+            if(Executive.game?.loaded) handleModPageExit();
+        });
         installIndependentPollObserver();
         installMarginThroughNightObserver();
         installElectionNightTheme();
