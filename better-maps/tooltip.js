@@ -1,6 +1,11 @@
 ﻿{
     const resultProxies = require("./proxies.js");
-    const { getCandidateColour, stringifyColour } = require("./colours.js");
+    const {
+        getCandidateColour,
+        getCandidateColourForRace,
+        getCandidateVariantPartyKey,
+        stringifyColour
+    } = require("./colours.js");
     const config = require("./config.json");
     const tooltipDiv = document.createElement("div");
     tooltipDiv.style.display = "none";
@@ -10,13 +15,152 @@
     let lastPresidentialPrimaryPartyTrusted = false;
     let presidentialPrimaryWatcherInstalled = false;
     let lastPresidentialBackgroundRefreshTime = 0;
+    let primaryCountyResultResolver = null;
     const candidatePctDeltaCache = new Map();
+
+    const bmResultValueCache = new Map();
+    const bmValueAnimations = new Map();
+    const bmRowPositionCache = new Map();
+    const BM_VALUE_ANIM_MS = 620;
+    const BM_VALUE_ANIM_STALE_MS = 30000;
+    const BM_REORDER_ANIM_MS = 520;
+    function bmResultAnimationsEnabled() {
+        try {
+            if (config && config.animateTooltipResults === false) return false;
+        } catch (error) {}
+        return typeof requestAnimationFrame === "function";
+    }
+    function bmPrefersReducedMotion() {
+        try {
+            return typeof matchMedia === "function"
+                && matchMedia("(prefers-reduced-motion: reduce)").matches;
+        } catch (error) {
+            return false;
+        }
+    }
+    function bmEaseOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
+    }
+    function bmAnimateNumericText(cacheKey, target, fromValue, toValue, formatValue, durationMs) {
+        const existing = bmValueAnimations.get(cacheKey);
+        if (existing) cancelAnimationFrame(existing);
+        if (!target || typeof requestAnimationFrame !== "function") {
+            if (target) target.textContent = formatValue(toValue);
+            const record = bmResultValueCache.get(cacheKey);
+            if (record) record.displayed = toValue;
+            return;
+        }
+        const duration = Number(durationMs) > 0 ? Number(durationMs) : BM_VALUE_ANIM_MS;
+        const start = Date.now();
+        const delta = toValue - fromValue;
+        const step = () => {
+            const elapsed = Date.now() - start;
+            const progress = elapsed >= duration ? 1 : Math.max(0, elapsed / duration);
+            const current = progress >= 1 ? toValue : fromValue + delta * bmEaseOutCubic(progress);
+            const record = bmResultValueCache.get(cacheKey);
+            if (record) record.displayed = current;
+            if (target.isConnected) target.textContent = formatValue(current);
+            if (progress < 1) {
+                bmValueAnimations.set(cacheKey, requestAnimationFrame(step));
+            } else {
+                bmValueAnimations.delete(cacheKey);
+            }
+        };
+        bmValueAnimations.set(cacheKey, requestAnimationFrame(step));
+    }
+    function bmMaybeAnimateValue(cacheKey, target, toValue, formatValue) {
+        if (!Number.isFinite(toValue)) {
+            if (target) target.textContent = formatValue(Number(toValue) || 0);
+            return;
+        }
+        const now = Date.now();
+        const previous = bmResultValueCache.get(cacheKey);
+
+        const displayed = previous && Number.isFinite(previous.displayed)
+            ? previous.displayed
+            : null;
+        const stale = !previous || (now - previous.time) > BM_VALUE_ANIM_STALE_MS;
+        const canAnimate = target
+            && displayed != null
+            && !stale
+            && bmResultAnimationsEnabled()
+            && !bmPrefersReducedMotion()
+            && Math.abs(displayed - toValue) >= 0.005;
+        bmResultValueCache.set(cacheKey, {
+            target: toValue,
+            displayed: canAnimate ? displayed : toValue,
+            time: now
+        });
+        if (!target) return;
+        if (!canAnimate) {
+            const existing = bmValueAnimations.get(cacheKey);
+            if (existing) {
+                cancelAnimationFrame(existing);
+                bmValueAnimations.delete(cacheKey);
+            }
+            target.textContent = formatValue(toValue);
+            return;
+        }
+        bmAnimateNumericText(cacheKey, target, displayed, toValue, formatValue, BM_VALUE_ANIM_MS);
+    }
+    function bmGetCandidateAnimId(candidate) {
+        return candidate?.id ?? candidate?.candID ?? candidate?.name ?? "?";
+    }
+
+    function bmGetAnimatableCells(row) {
+        return Array.from(row.cells || []).filter(
+            cell => !cell.classList.contains("stateCell")
+        );
+    }
+    function bmAnimateRowReorder(tbody, keyPrefix) {
+        try {
+            if (!tbody || !bmResultAnimationsEnabled() || bmPrefersReducedMotion()) return;
+            const rows = Array.from(tbody.rows).filter(row => row?.dataset?.bmAnimKey);
+            if (!rows.length) return;
+
+            requestAnimationFrame(() => {
+                try {
+                    if (!tbody.isConnected || tbody.offsetParent === null) return;
+                    rows.forEach(row => {
+                        const posKey = row.dataset.bmAnimKey;
+                        const newTop = row.offsetTop;
+                        const previousTop = bmRowPositionCache.get(posKey);
+                        bmRowPositionCache.set(posKey, newTop);
+                        if (
+                            previousTop != null
+                            && Math.abs(previousTop - newTop) > 1
+                        ) {
+                            bmGetAnimatableCells(row).forEach(cell => {
+                                if (typeof cell.animate !== "function") return;
+                                cell.animate(
+                                    [
+                                        { transform: `translateY(${previousTop - newTop}px)` },
+                                        { transform: "translateY(0)" }
+                                    ],
+                                    { duration: BM_REORDER_ANIM_MS, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)" }
+                                );
+                            });
+                        }
+                    });
+                } catch (error) {}
+            });
+        } catch (error) {}
+    }
     const candidatePortraitCharacterCache = new Map();
     const candidatePortraitImageCache = new Map();
+    const candidateBannerPortraitImageCache = new Map();
+    const candidateTooltipPortraitImageCache = new Map();
+    const candidateTooltipPortraitAliasCache = new Map();
     const candidatePortraitPaletteCache = new Map();
     const candidatePortraitRenderJobs = new Map();
     const candidatePortraitRenderQueue = [];
-    let candidatePortraitActiveJob = null;
+    const candidatePortraitActiveJobs = new Set();
+    const MAX_CONCURRENT_PORTRAIT_JOBS = 4;
+    const MAX_CANDIDATE_PORTRAIT_RENDER_ATTEMPTS = 42;
+    const MAX_VISIBLE_PORTRAIT_FALLBACK_FRAMES = 720;
+    const CANDIDATE_PORTRAIT_CANVAS_WIDTH = 480;
+    const CANDIDATE_PORTRAIT_CANVAS_HEIGHT = 660;
+    const CANDIDATE_PORTRAIT_RENDER_SCALE = 0.4;
     let candidatePortraitRenderHost = null;
     let nativeHouseDistrictSnapshotCache = {
         stateId: "",
@@ -92,7 +236,6 @@
         const signClass = roundedDelta > 0 ? "pct-delta-sign-plus" : "pct-delta-sign-minus";
         badge.innerHTML = `<span class="pct-delta-sign ${signClass}" aria-hidden="true"></span><span>${Math.abs(roundedDelta).toFixed(1)}%</span>`;
         cellPct.appendChild(badge);
-        setTimeout(() => badge.remove(), 1100);
     }
     function readRuntimeValue(name) {
         try {
@@ -552,9 +695,17 @@
             .replace(/\u00a0/g, " ")
             .trim();
         const rawName = String(candidate?.name || candidate?.fullName || "").trim();
+        const fullName = String(
+            candidate?.fullName
+            || candidate?.displayName
+            || [candidate?.firstName || candidate?.first, candidate?.lastName || candidate?.last]
+                .filter(Boolean)
+                .join(" ")
+            || ""
+        ).trim();
         const parts = rawName.split(/\s+/).filter(Boolean);
         const lastName = String(candidate?.last || candidate?.lastName || parts[parts.length - 1] || "").trim();
-        [cleanDisplay, rawName, lastName].forEach(name => {
+        [fullName, cleanDisplay, rawName, lastName].forEach(name => {
             if (name && name.length >= 2) names.add(name.toLowerCase());
         });
         return Array.from(names);
@@ -698,6 +849,165 @@
             width: sourceWidth,
             height: sourceHeight
         };
+    }
+    function removeEdgeConnectedPortraitBackground(canvas, colourTolerance = 24) {
+        const context = canvas.getContext("2d");
+        const width = canvas.width;
+        const height = canvas.height;
+        if (!width || !height) return;
+        const image = context.getImageData(0, 0, width, height);
+        const data = image.data;
+        const edgeColours = [];
+        const collectEdgeColour = (x, y) => {
+            const index = ((y * width) + x) * 4;
+            if (data[index + 3] < 24) return;
+            edgeColours.push({
+                r: data[index],
+                g: data[index + 1],
+                b: data[index + 2]
+            });
+        };
+        const sampleStep = Math.max(1, Math.floor(Math.min(width, height) / 48));
+        for (let x = 0; x < width; x += sampleStep) {
+            collectEdgeColour(x, 0);
+            collectEdgeColour(x, height - 1);
+        }
+        for (let y = 0; y < height; y += sampleStep) {
+            collectEdgeColour(0, y);
+            collectEdgeColour(width - 1, y);
+        }
+        const buckets = new Map();
+        edgeColours.forEach(colour => {
+            const key = [
+                Math.round(colour.r / 16),
+                Math.round(colour.g / 16),
+                Math.round(colour.b / 16)
+            ].join("|");
+            const bucket = buckets.get(key) || { count: 0, r: 0, g: 0, b: 0 };
+            bucket.count++;
+            bucket.r += colour.r;
+            bucket.g += colour.g;
+            bucket.b += colour.b;
+            buckets.set(key, bucket);
+        });
+        const dominantBucket = Array.from(buckets.values())
+            .sort((a, b) => b.count - a.count)[0];
+        const background = dominantBucket
+            ? {
+                r: dominantBucket.r / dominantBucket.count,
+                g: dominantBucket.g / dominantBucket.count,
+                b: dominantBucket.b / dominantBucket.count
+            }
+            : null;
+        const visited = new Uint8Array(width * height);
+        const queue = [];
+        const isBackground = pixel => {
+            const index = pixel * 4;
+            if (data[index + 3] < 24) return true;
+            if (!background) return false;
+            const redDistance = data[index] - background.r;
+            const greenDistance = data[index + 1] - background.g;
+            const blueDistance = data[index + 2] - background.b;
+
+            return Math.sqrt(
+                (redDistance * redDistance)
+                + (greenDistance * greenDistance)
+                + (blueDistance * blueDistance)
+            ) <= colourTolerance;
+        };
+        const addPixel = (x, y) => {
+            if (x < 0 || y < 0 || x >= width || y >= height) return;
+            const pixel = (y * width) + x;
+            if (visited[pixel] || !isBackground(pixel)) return;
+            visited[pixel] = 1;
+            queue.push(pixel);
+        };
+        for (let x = 0; x < width; x++) {
+            addPixel(x, 0);
+            addPixel(x, height - 1);
+        }
+        for (let y = 0; y < height; y++) {
+            addPixel(0, y);
+            addPixel(width - 1, y);
+        }
+        for (let cursor = 0; cursor < queue.length; cursor++) {
+            const pixel = queue[cursor];
+            const x = pixel % width;
+            const y = Math.floor(pixel / width);
+            data[(pixel * 4) + 3] = 0;
+            addPixel(x + 1, y);
+            addPixel(x - 1, y);
+            addPixel(x, y + 1);
+            addPixel(x, y - 1);
+        }
+        context.putImageData(image, 0, 0);
+    }
+    function createBannerCandidatePortrait(sourceCanvas) {
+        const workingCanvas = document.createElement("canvas");
+        workingCanvas.width = sourceCanvas.width;
+        workingCanvas.height = sourceCanvas.height;
+        const workingContext = workingCanvas.getContext("2d");
+        workingContext.drawImage(sourceCanvas, 0, 0);
+
+        removeEdgeConnectedPortraitBackground(workingCanvas, 52);
+        const bounds = getRenderedPortraitBounds(workingCanvas);
+
+        const trimBottom = Math.max(1, Math.round(bounds.height * 0.01));
+        const outputHeight = Math.max(1, bounds.height - trimBottom);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, bounds.width);
+        canvas.height = outputHeight;
+        canvas.className = "bm-president-elect-portrait-image";
+        canvas.getContext("2d").drawImage(
+            workingCanvas,
+            bounds.x,
+            bounds.y,
+            bounds.width,
+            outputHeight,
+            0,
+            0,
+            bounds.width,
+            outputHeight
+        );
+        return canvas;
+    }
+    function createTooltipCandidatePortrait(sourceCanvas) {
+        const workingCanvas = document.createElement("canvas");
+        workingCanvas.width = sourceCanvas.width;
+        workingCanvas.height = sourceCanvas.height;
+        workingCanvas.getContext("2d").drawImage(sourceCanvas, 0, 0);
+        removeEdgeConnectedPortraitBackground(workingCanvas, 20);
+        const sourceBounds = getRenderedPortraitBounds(workingCanvas);
+
+        const canvasSize = 114;
+        const contentSize = 111;
+
+        const sourceTrimBottom = Math.max(1, Math.round(sourceBounds.height * 0.012));
+        const sourceHeight = Math.max(1, sourceBounds.height - sourceTrimBottom);
+        const canvas = document.createElement("canvas");
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+        const context = canvas.getContext("2d");
+        const scale = Math.min(
+            contentSize / Math.max(1, sourceBounds.width),
+            contentSize / sourceHeight
+        );
+        const width = Math.max(1, sourceBounds.width * scale);
+        const height = Math.max(1, sourceHeight * scale);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(
+            workingCanvas,
+            sourceBounds.x,
+            sourceBounds.y,
+            sourceBounds.width,
+            sourceHeight,
+            (canvasSize - width) / 2,
+            canvasSize - height,
+            width,
+            height
+        );
+        return canvas;
     }
     function getCanvasCssRgb(context, colour) {
         const previousFill = context.fillStyle;
@@ -895,6 +1205,15 @@
         const parts = normalizeCandidatePortraitName(rawName).split(/\s+/).filter(Boolean);
         return parts.length ? parts[parts.length - 1] : "";
     }
+    function getCandidatePortraitFullName(candidate) {
+        return normalizeCandidatePortraitName(
+            candidate?.fullName
+            || candidate?.displayName
+            || [candidate?.firstName || candidate?.first, candidate?.lastName || candidate?.last].filter(Boolean).join(" ")
+            || candidate?.name
+            || ""
+        ).replace(/\s+/g, " ").trim();
+    }
     function getCharacterPortraitLastName(character) {
         if (!Array.isArray(character)) return getCandidatePortraitLastName(character);
         const candidateEnum = Executive?.enums?.characterArray?.candidate || {};
@@ -916,6 +1235,27 @@
         } catch { }
         return "";
     }
+    function getCharacterPortraitFullName(character) {
+        if (!Array.isArray(character)) return getCandidatePortraitFullName(character);
+        try {
+            const wrapped = Executive?.data?.characters?.wrapCharacter(character, "candidate");
+            const wrappedName = getCandidatePortraitFullName(wrapped);
+            if (wrappedName) return wrappedName;
+        } catch { }
+        const candidateEnum = Executive?.enums?.characterArray?.candidate || {};
+        const firstIndexes = [candidateEnum.first, candidateEnum.firstName, candidateEnum.fName, 4];
+        const lastIndexes = [candidateEnum.last, candidateEnum.lastName, candidateEnum.lName, 5];
+        const first = firstIndexes
+            .map(index => Number(index))
+            .find(index => Number.isInteger(index) && character[index]);
+        const last = lastIndexes
+            .map(index => Number(index))
+            .find(index => Number.isInteger(index) && character[index]);
+        return normalizeCandidatePortraitName([
+            first !== undefined ? character[first] : "",
+            last !== undefined ? character[last] : ""
+        ].filter(Boolean).join(" ")).replace(/\s+/g, " ").trim();
+    }
     function getCharacterPortraitId(character) {
         if (!Array.isArray(character)) return null;
         const idIndex = Executive?.enums?.characterArray?.candidate?.candidateId ?? 111;
@@ -926,7 +1266,10 @@
         const party = String(candidate?.party || candidate?.caucusParty || candidate?.caucus || "").toLowerCase();
         if (party.includes("dem") || party === "d") return "D";
         if (party.includes("rep") || party === "r") return "R";
-        if (party.includes("ind") || party === "i") return "I";
+        if (
+            party.includes("ind")
+            || ["i", "id", "ir", "i-d", "i-r"].includes(party)
+        ) return "I";
         return "";
     }
     function getCharacterPortraitPartyCode(character) {
@@ -963,17 +1306,56 @@
             ?? candidate?.candID
             ?? candidate?.candId
             ?? candidate?.candidateId
+            ?? candidate?.candidateID
             ?? candidate?.characterId
+            ?? candidate?.characterID
+            ?? candidate?.extendedAttribs?.candidateId
+            ?? candidate?.extendedAttribs?.candidateID
+            ?? candidate?.extendedAttribs?.characterId
+            ?? candidate?.extendedAttribs?.characterID
             ?? candidate?.ID;
         if (String(candidateId ?? "").trim() === "") return null;
         return candidateId !== undefined && candidateId !== null ? candidateId : null;
+    }
+    function findNestedCandidateCharacterArray(value, depth = 0, seen = new Set()) {
+        if (!value || depth > 4) return null;
+        if (typeof value === "object") {
+            if (seen.has(value)) return null;
+            seen.add(value);
+        }
+        if (isCandidateCharacterArray(value)) return value;
+        if (Array.isArray(value)) {
+            for (const entry of value) {
+                const found = findNestedCandidateCharacterArray(entry, depth + 1, seen);
+                if (found) return found;
+            }
+            return null;
+        }
+        if (typeof value !== "object") return null;
+        for (const entry of Object.values(value)) {
+            const found = findNestedCandidateCharacterArray(entry, depth + 1, seen);
+            if (found) return found;
+        }
+        return null;
     }
     function getCandidatePortraitCacheKey(candidate) {
         const candidateId = getCandidatePortraitId(candidate);
         if (candidateId !== undefined && candidateId !== null) return `id:${candidateId}`;
         return [
             "candidate",
+            getCandidatePortraitFullName(candidate),
             getCandidatePortraitLastName(candidate),
+            getCandidatePortraitPartyCode(candidate),
+            getCandidatePortraitStateCode(candidate),
+            getCandidatePortraitDistrictCode(candidate),
+            Number(candidate?.votes ?? candidate?.totVotes ?? 0) || 0
+        ].join("|");
+    }
+    function getCandidatePortraitAliasKey(candidate) {
+        const fullName = getCandidatePortraitFullName(candidate);
+        if (fullName.split(/\s+/).filter(Boolean).length < 2) return "";
+        return [
+            fullName,
             getCandidatePortraitPartyCode(candidate),
             getCandidatePortraitStateCode(candidate),
             getCandidatePortraitDistrictCode(candidate)
@@ -990,6 +1372,53 @@
         const palette = candidate ? getCandidateAvatarPalette(candidate) : candidatePortraitPaletteCache.get(cacheKey);
         if (palette) applyCandidateAvatarPalette(image, palette);
         return image;
+    }
+    function createCachedBannerCandidatePortrait(cacheKey) {
+        const src = candidateBannerPortraitImageCache.get(cacheKey);
+        if (!src) return null;
+        const image = document.createElement("img");
+        image.className = "bm-president-elect-portrait-image";
+        image.src = src;
+        image.alt = "";
+        image.setAttribute("aria-hidden", "true");
+        return image;
+    }
+    function applyCandidateTooltipAvatarAppearance(element, candidate, options = {}) {
+        if (!element) return;
+        const candidateColour = options.candidateColour
+            || stringifyColour(getCandidateColour(candidate || {}));
+
+        const fill = options.projected === true ? "hsl(0, 0%, 95%)" : candidateColour;
+        element.classList.toggle("bm-candidate-avatar-projected", options.projected === true);
+        element.style.setProperty("--bm-candidate-avatar-fill", fill);
+        element.style.setProperty("--bm-candidate-avatar-stroke", candidateColour);
+        element.style.backgroundColor = fill;
+        element.dataset.candidateColour = candidateColour;
+        element.dataset.projected = options.projected === true ? "true" : "false";
+    }
+    function createCachedCandidateSilhouetteAvatar(cacheKey, candidate, options = {}) {
+        const aliasKey = candidate ? getCandidatePortraitAliasKey(candidate) : "";
+        const src = options.portraitSrc
+            || candidateTooltipPortraitImageCache.get(cacheKey)
+            || (aliasKey ? candidateTooltipPortraitAliasCache.get(aliasKey) : "");
+        const portrait = src
+            ? Object.assign(document.createElement("img"), {
+                src,
+                alt: ""
+            })
+            : createCachedBannerCandidatePortrait(cacheKey);
+        if (!portrait) return null;
+        portrait.setAttribute("aria-hidden", "true");
+        portrait.className = "bm-candidate-avatar-figure bm-candidate-avatar-body";
+        const head = portrait.cloneNode(true);
+        head.className = "bm-candidate-avatar-figure bm-candidate-avatar-head";
+        const frame = document.createElement("span");
+        frame.className = "bm-candidate-avatar bm-candidate-silhouette-avatar";
+        frame.setAttribute("aria-hidden", "true");
+        applyCandidateTooltipAvatarAppearance(frame, candidate, options);
+        frame.appendChild(portrait);
+        frame.appendChild(head);
+        return frame;
     }
     function cacheCandidatePortrait(canvas, cacheKey, candidate = null) {
         if (candidate) {
@@ -1044,15 +1473,29 @@
             value.cands,
             value.candidates,
             value.candidate,
+            value.candidateArray,
+            value.candidateData,
+            value.candidateObj,
+            value.candidateObject,
             value.characterArray,
             value.character,
+            value.characterData,
             value.candArray,
+            value.cand,
             value.allCands,
             value.dem,
             value.rep,
             value.elections,
             value.districts,
-            value.states
+            value.states,
+            value.races,
+            value.race,
+            value.politician,
+            value.person,
+            value.sourceCandidate,
+            value.originalCandidate,
+            value.baseCandidate,
+            value.wrappedCandidate
         ].forEach(entry => addCandidateCharacterArrays(entry, output, depth + 1, seen));
     }
     function addCandidateCharacterContainer(value, output) {
@@ -1122,13 +1565,15 @@
     function findKnownCandidateCharacter(candidate) {
         const rawCandidateId = getCandidatePortraitId(candidate);
         const candidateId = rawCandidateId !== null ? Number(rawCandidateId) : NaN;
+        const fullName = getCandidatePortraitFullName(candidate);
+        const hasFullName = fullName.split(/\s+/).filter(Boolean).length >= 2;
         const lastName = getCandidatePortraitLastName(candidate);
         const party = getCandidatePortraitPartyCode(candidate);
         const state = getCandidatePortraitStateCode(candidate);
         const district = getCandidatePortraitDistrictCode(candidate);
         const cacheKey = Number.isFinite(candidateId)
             ? `id:${candidateId}`
-            : `name:${lastName}|party:${party}|state:${state}|district:${district}`;
+            : `name:${fullName || lastName}|party:${party}|state:${state}|district:${district}`;
         if (candidatePortraitCharacterCache.has(cacheKey)) {
             return candidatePortraitCharacterCache.get(cacheKey);
         }
@@ -1136,10 +1581,14 @@
         const matchedById = Number.isFinite(candidateId)
             ? characters.find(character => getCharacterPortraitId(character) === candidateId)
             : null;
+        const matchingFullNames = matchedById || !hasFullName
+            ? []
+            : characters.filter(character => getCharacterPortraitFullName(character) === fullName);
         const matchingNames = matchedById
             ? []
             : characters.filter(character => lastName && getCharacterPortraitLastName(character) === lastName);
-        const contextMatches = matchingNames.filter(character => {
+        const candidatePool = matchingFullNames.length ? matchingFullNames : matchingNames;
+        const contextMatches = candidatePool.filter(character => {
                 const characterParty = getCharacterPortraitPartyCode(character);
                 const characterState = getCharacterPortraitStateCode(character);
                 const characterDistrict = getCharacterPortraitDistrictCode(character);
@@ -1150,7 +1599,7 @@
             });
         const matchedByName = matchedById
             || (contextMatches.length === 1 ? contextMatches[0] : null)
-            || (!district && matchingNames.length === 1 ? matchingNames[0] : null);
+            || null;
         if (matchedByName) candidatePortraitCharacterCache.set(cacheKey, matchedByName);
         return matchedByName || null;
     }
@@ -1158,8 +1607,22 @@
         const directCharacter = candidate?.characterArray
             || candidate?.character
             || candidate?.portrait
-            || candidate?.candArray;
+            || candidate?.candArray
+            || candidate?.candidateArray
+            || candidate?.candidateData
+            || candidate?.candidateObj
+            || candidate?.candidateObject
+            || candidate?.characterData
+            || candidate?.cand
+            || candidate?.politician
+            || candidate?.person
+            || candidate?.sourceCandidate
+            || candidate?.originalCandidate
+            || candidate?.baseCandidate
+            || candidate?.wrappedCandidate;
         if (Array.isArray(directCharacter)) return directCharacter;
+        const nestedCharacter = findNestedCandidateCharacterArray(directCharacter || candidate);
+        if (nestedCharacter) return nestedCharacter;
         const candidateId = getCandidatePortraitId(candidate);
         if (candidateId !== undefined && candidateId !== null) {
             try {
@@ -1182,8 +1645,12 @@
         } catch { }
         return false;
     }
-    function renderCandidatePortrait(candidate) {
-        return createCachedCandidatePortrait(getCandidatePortraitCacheKey(candidate), candidate);
+    function renderCandidatePortrait(candidate, options = {}) {
+        return createCachedCandidateSilhouetteAvatar(
+            getCandidatePortraitCacheKey(candidate),
+            candidate,
+            options
+        );
     }
     function getCandidatePortraitRenderHost() {
         if (candidatePortraitRenderHost?.isConnected) return candidatePortraitRenderHost;
@@ -1193,8 +1660,8 @@
             "position:fixed",
             "left:-10000px",
             "top:-10000px",
-            "width:360px",
-            "height:495px",
+            `width:${CANDIDATE_PORTRAIT_CANVAS_WIDTH}px`,
+            `height:${CANDIDATE_PORTRAIT_CANVAS_HEIGHT}px`,
             "overflow:hidden",
             "pointer-events:none"
         ].join(";");
@@ -1203,22 +1670,78 @@
     }
     function replaceVisibleCandidatePortraitPlaceholders(cacheKey) {
         tooltipDiv.querySelectorAll(".bm-candidate-avatar-placeholder").forEach(placeholder => {
-            if (placeholder.dataset.candidatePortraitKey !== cacheKey) return;
-            const portrait = createCachedCandidatePortrait(cacheKey);
+            const placeholderKey = placeholder.dataset.candidatePortraitKey || "";
+            const aliasKey = placeholder.dataset.candidatePortraitAlias || "";
+            const portraitSrc = candidateTooltipPortraitImageCache.get(placeholderKey)
+                || (aliasKey ? candidateTooltipPortraitAliasCache.get(aliasKey) : "");
+            if (!portraitSrc) return;
+            const portrait = createCachedCandidateSilhouetteAvatar(
+                placeholderKey || cacheKey,
+                null,
+                {
+                    candidateColour: placeholder.dataset.candidateColour,
+                    projected: placeholder.dataset.projected === "true",
+                    portraitSrc
+                }
+            );
             if (portrait) placeholder.replaceWith(portrait);
         });
     }
     function cleanUpCandidatePortraitJob(job) {
         if (job.sourceCanvas?.isConnected) job.sourceCanvas.remove();
         candidatePortraitRenderJobs.delete(job.cacheKey);
-        if (candidatePortraitActiveJob === job) candidatePortraitActiveJob = null;
+        candidatePortraitActiveJobs.delete(job);
+        processNextCandidatePortraitRenderJob();
+    }
+    function deferCandidatePortraitJob(job, delay) {
+        candidatePortraitActiveJobs.delete(job);
+        setTimeout(() => {
+            if (!candidatePortraitRenderJobs.has(job.cacheKey)) return;
+            if (!candidatePortraitRenderQueue.includes(job)) {
+                candidatePortraitRenderQueue.push(job);
+            }
+            processNextCandidatePortraitRenderJob();
+        }, delay);
         processNextCandidatePortraitRenderJob();
     }
     function processNextCandidatePortraitRenderJob() {
-        if (candidatePortraitActiveJob || candidatePortraitRenderQueue.length === 0) return;
+        if (
+            candidatePortraitActiveJobs.size >= MAX_CONCURRENT_PORTRAIT_JOBS
+            || candidatePortraitRenderQueue.length === 0
+        ) return;
         const job = candidatePortraitRenderQueue.shift();
-        candidatePortraitActiveJob = job;
+        if (!job.character) job.character = getCandidateCharacterArray(job.candidate);
+        if (typeof job.drawCharacter !== "function") job.drawCharacter = getCandidateRenderer();
+        if (!job.character || typeof job.drawCharacter !== "function") {
+            if (job.attempts >= MAX_CANDIDATE_PORTRAIT_RENDER_ATTEMPTS) {
+                cleanUpCandidatePortraitJob(job);
+                return;
+            }
+            const retryDelay = Math.min(80 + (job.attempts * 70), 500);
+            job.attempts++;
+            deferCandidatePortraitJob(job, retryDelay);
+            return;
+        }
+        candidatePortraitActiveJobs.add(job);
         const finish = () => {
+            try {
+                const bannerPortrait = createBannerCandidatePortrait(job.sourceCanvas);
+                candidateBannerPortraitImageCache.set(
+                    job.cacheKey,
+                    bannerPortrait.toDataURL("image/png")
+                );
+                candidateTooltipPortraitImageCache.set(
+                    job.cacheKey,
+                    createTooltipCandidatePortrait(job.sourceCanvas).toDataURL("image/png")
+                );
+                const aliasKey = getCandidatePortraitAliasKey(job.candidate);
+                if (aliasKey) {
+                    candidateTooltipPortraitAliasCache.set(
+                        aliasKey,
+                        candidateTooltipPortraitImageCache.get(job.cacheKey)
+                    );
+                }
+            } catch { }
             const portrait = cacheCandidatePortrait(
                 createCircularCandidatePortrait(job.sourceCanvas, job.candidate),
                 job.cacheKey,
@@ -1237,33 +1760,51 @@
             if (typeof job.drawCharacter !== "function") job.drawCharacter = getCandidateRenderer();
             if (job.character && typeof job.drawCharacter === "function" && !job.sourceCanvas) {
                 job.sourceCanvas = document.createElement("canvas");
-                job.sourceCanvas.width = 360;
-                job.sourceCanvas.height = 495;
+                job.sourceCanvas.width = CANDIDATE_PORTRAIT_CANVAS_WIDTH;
+                job.sourceCanvas.height = CANDIDATE_PORTRAIT_CANVAS_HEIGHT;
                 getCandidatePortraitRenderHost().appendChild(job.sourceCanvas);
                 try {
-                    job.drawCharacter(job.character, job.sourceCanvas, "candidate", 0.3);
+                    job.drawCharacter(
+                        job.character,
+                        job.sourceCanvas,
+                        "candidate",
+                        CANDIDATE_PORTRAIT_RENDER_SCALE
+                    );
                 } catch { }
             }
             if (job.sourceCanvas && canvasHasRenderedPortrait(job.sourceCanvas)) {
                 finish();
                 return;
             }
-            if (job.attempts >= 8) {
+            if (job.attempts >= MAX_CANDIDATE_PORTRAIT_RENDER_ATTEMPTS) {
                 cleanUpCandidatePortraitJob(job);
                 return;
             }
             const retryDelay = Math.min(80 + (job.attempts * 70), 500);
             job.attempts++;
+            if (
+                job.attempts % 4 === 0
+                && candidatePortraitRenderQueue.length > 0
+            ) {
+                deferCandidatePortraitJob(job, retryDelay);
+                return;
+            }
             setTimeout(() => {
                 if (job.sourceCanvas && job.character && typeof job.drawCharacter === "function") {
                     try {
-                        job.drawCharacter(job.character, job.sourceCanvas, "candidate", 0.3);
+                        job.drawCharacter(
+                            job.character,
+                            job.sourceCanvas,
+                            "candidate",
+                            CANDIDATE_PORTRAIT_RENDER_SCALE
+                        );
                     } catch { }
                 }
                 pollRenderedPortrait();
             }, retryDelay);
         };
         pollRenderedPortrait();
+        processNextCandidatePortraitRenderJob();
     }
     function requestCandidatePortrait(candidate, onReady) {
         const cacheKey = getCandidatePortraitCacheKey(candidate);
@@ -1271,18 +1812,18 @@
         const cachedPortrait = createCachedCandidatePortrait(cacheKey, candidate);
         if (cachedPortrait) {
             onReady(cachedPortrait);
-            return;
+            if (candidateBannerPortraitImageCache.has(cacheKey)) return;
         }
         const activeJob = candidatePortraitRenderJobs.get(cacheKey);
         if (activeJob) {
-            activeJob.callbacks.push(onReady);
+            if (!cachedPortrait) activeJob.callbacks.push(onReady);
             return;
         }
         try {
             const job = {
                 cacheKey,
                 candidate,
-                callbacks: [onReady],
+                callbacks: cachedPortrait ? [] : [onReady],
                 attempts: 0,
                 character: null,
                 drawCharacter: null,
@@ -1293,27 +1834,34 @@
             processNextCandidatePortraitRenderJob();
         } catch { }
     }
+
+    function getCandidateBannerPortraitSource(candidate) {
+        if (!candidate) return "";
+        const cacheKey = getCandidatePortraitCacheKey(candidate);
+        const cachedSource = candidateBannerPortraitImageCache.get(cacheKey) || "";
+        if (cachedSource) return cachedSource;
+
+        if (!candidatePortraitRenderJobs.has(cacheKey)) requestCandidatePortrait(candidate, () => {});
+        return "";
+    }
     function cloneCandidatePortraitMedia(media, candidate) {
         const tag = media?.tagName?.toLowerCase();
+        const cacheKey = getCandidatePortraitCacheKey(candidate);
+        const aliasKey = getCandidatePortraitAliasKey(candidate);
+        let portraitSrc = "";
         if (tag === "canvas") {
             try {
-                return createCircularCandidatePortrait(media, candidate);
+                portraitSrc = createTooltipCandidatePortrait(media).toDataURL("image/png");
             } catch (_err) {
                 return null;
             }
+        } else if (tag === "img") {
+            portraitSrc = media.currentSrc || media.src || "";
         }
-        if (tag === "img") {
-            const src = media.currentSrc || media.src;
-            if (!src) return null;
-            const img = document.createElement("img");
-            img.className = "bm-candidate-avatar";
-            img.src = src;
-            img.alt = "";
-            img.setAttribute("aria-hidden", "true");
-            applyCandidateAvatarPalette(img, candidate);
-            return img;
-        }
-        return null;
+        if (!portraitSrc) return null;
+        candidateTooltipPortraitImageCache.set(cacheKey, portraitSrc);
+        if (aliasKey) candidateTooltipPortraitAliasCache.set(aliasKey, portraitSrc);
+        return createCachedCandidateSilhouetteAvatar(cacheKey, candidate, { portraitSrc });
     }
     function isPlausibleCandidatePortraitRow(node, media) {
         if (!node || !media) return false;
@@ -1332,32 +1880,45 @@
         const searchNames = getCandidatePortraitSearchNames(candidate, displayName);
         if (!searchNames.length) return null;
         const mediaNodes = Array.from(document.querySelectorAll("canvas, img"));
-        for (const media of mediaNodes) {
-            if (!isVisibleCandidatePortraitSource(media)) continue;
-            let node = media.parentElement;
-            for (let depth = 0; node && depth < 8; depth++) {
-                if (tooltipDiv.contains(node)) break;
-                const text = String(node.innerText || node.textContent || "")
-                    .replace(/\s+/g, " ")
-                    .toLowerCase();
-                if (
-                    text
-                    && searchNames.some(name => text.includes(name))
-                    && isPlausibleCandidatePortraitRow(node, media)
-                ) {
-                    const cloned = cloneCandidatePortraitMedia(media, candidate);
-                    if (cloned) return cloned;
+        const fullNames = searchNames.filter(name => name.split(/\s+/).filter(Boolean).length >= 2);
+        const shortNames = searchNames.filter(name => !fullNames.includes(name));
+        const findUsingNames = names => {
+            if (!names.length) return null;
+            for (const media of mediaNodes) {
+                if (!isVisibleCandidatePortraitSource(media)) continue;
+                let node = media.parentElement;
+                for (let depth = 0; node && depth < 8; depth++) {
+                    if (tooltipDiv.contains(node)) break;
+                    const text = String(node.innerText || node.textContent || "")
+                        .replace(/\s+/g, " ")
+                        .toLowerCase();
+                    if (
+                        text
+                        && names.some(name => text.includes(name))
+                        && isPlausibleCandidatePortraitRow(node, media)
+                    ) {
+                        const cloned = cloneCandidatePortraitMedia(media, candidate);
+                        if (cloned) return cloned;
+                    }
+                    node = node.parentElement;
                 }
-                node = node.parentElement;
             }
-        }
-        return null;
+            return null;
+        };
+
+        const fullNamePortrait = findUsingNames(fullNames);
+        if (fullNamePortrait || fullNames.length) return fullNamePortrait;
+        return findUsingNames(shortNames);
     }
-    function createCandidateAvatarPlaceholder(candidate) {
+    function createCandidateAvatarPlaceholder(candidate, options = {}) {
         const placeholder = document.createElement("span");
-        placeholder.className = "bm-candidate-avatar bm-candidate-avatar-placeholder";
+        placeholder.className = [
+            "bm-candidate-avatar",
+            "bm-candidate-silhouette-avatar",
+            "bm-candidate-avatar-placeholder"
+        ].join(" ");
         placeholder.setAttribute("aria-hidden", "true");
-        applyCandidateAvatarPalette(placeholder, candidate);
+        applyCandidateTooltipAvatarAppearance(placeholder, candidate, options);
         return placeholder;
     }
     function createWinnerIconElement() {
@@ -1375,24 +1936,85 @@
     function renderCandidateCellContent(cellCandidate, candidate, options = {}) {
         if (!cellCandidate) return;
         const displayName = getCandidateDisplayName(candidate);
+
+        const portraitCandidate = candidate?.portraitSource || candidate?.source || candidate;
         cellCandidate.textContent = "";
         const wrapper = document.createElement("span");
         wrapper.className = "candidate-wrapper bm-candidate-name-wrapper";
-        const avatarKey = getCandidatePortraitCacheKey(candidate);
+        const avatarKey = getCandidatePortraitCacheKey(portraitCandidate);
         candidatePortraitPaletteCache.set(avatarKey, getCandidateAvatarPalette(candidate));
-        const hasCandidateId = getCandidatePortraitId(candidate) !== null;
-        const avatar = (
-            renderCandidatePortrait(candidate)
-            || (!hasCandidateId ? findVisibleCandidatePortrait(candidate, displayName) : null)
-            || createCandidateAvatarPlaceholder(candidate)
-        );
-        applyCandidateAvatarPalette(avatar, candidate);
+        const cachedAvatar = renderCandidatePortrait(portraitCandidate, options);
+
+        const visibleAvatar = cachedAvatar
+            ? null
+            : findVisibleCandidatePortrait(portraitCandidate, displayName);
+        if (visibleAvatar) {
+            try {
+                if (visibleAvatar.tagName?.toLowerCase() === "canvas") {
+                    cacheCandidatePortrait(visibleAvatar, avatarKey, portraitCandidate);
+                } else {
+                    const visibleSrc = visibleAvatar.currentSrc || visibleAvatar.src;
+                    if (visibleSrc) candidatePortraitImageCache.set(avatarKey, visibleSrc);
+                }
+            } catch { }
+        }
+        const avatar = cachedAvatar
+            || visibleAvatar
+            || createCandidateAvatarPlaceholder(candidate, options);
+        applyCandidateTooltipAvatarAppearance(avatar, candidate, options);
         wrapper.appendChild(avatar);
         if (avatar.classList.contains("bm-candidate-avatar-placeholder")) {
             avatar.dataset.candidatePortraitKey = avatarKey;
-            requestCandidatePortrait(candidate, portrait => {
-                if (portrait) avatar.replaceWith(portrait);
+            avatar.dataset.candidatePortraitAlias = getCandidatePortraitAliasKey(portraitCandidate);
+            let attempts = 0;
+            let visiblePortraitAttempts = 0;
+            let wasConnected = false;
+            let replaced = false;
+            const replacePlaceholderWithPortrait = portrait => {
+                if (replaced || !avatar.isConnected) return false;
+                const readyPortrait = portrait || renderCandidatePortrait(portraitCandidate, options);
+                if (!readyPortrait) return false;
+                applyCandidateTooltipAvatarAppearance(readyPortrait, candidate, options);
+                avatar.replaceWith(readyPortrait);
+                replaced = true;
+                return true;
+            };
+            const replacePlaceholderWithVisiblePortrait = () => {
+                const visiblePortrait = findVisibleCandidatePortrait(portraitCandidate, displayName);
+                return visiblePortrait ? replacePlaceholderWithPortrait(visiblePortrait) : false;
+            };
+            const retryVisiblePortraitFallback = () => {
+                if (replaced || !avatar.isConnected) return;
+                if (replacePlaceholderWithVisiblePortrait()) return;
+                if (visiblePortraitAttempts >= MAX_VISIBLE_PORTRAIT_FALLBACK_FRAMES) return;
+                visiblePortraitAttempts++;
+                requestAnimationFrame(retryVisiblePortraitFallback);
+            };
+            const installSilhouetteWhenConnected = () => {
+                if (replaced) return;
+                if (attempts >= 60) {
+                    retryVisiblePortraitFallback();
+                    return;
+                }
+                if (!avatar.isConnected) {
+                    if (wasConnected) return;
+                    attempts++;
+                    requestAnimationFrame(installSilhouetteWhenConnected);
+                    return;
+                }
+                wasConnected = true;
+                if (!replacePlaceholderWithPortrait()) {
+                    retryVisiblePortraitFallback();
+                }
+            };
+            requestCandidatePortrait(portraitCandidate, () => {
+                if (replacePlaceholderWithPortrait(renderCandidatePortrait(portraitCandidate, options))) return;
+                requestAnimationFrame(() => {
+                    installSilhouetteWhenConnected();
+                    retryVisiblePortraitFallback();
+                });
             });
+            requestAnimationFrame(installSilhouetteWhenConnected);
         }
         const nameSpan = document.createElement("span");
         nameSpan.className = "bm-candidate-name-text";
@@ -1403,6 +2025,147 @@
         }
         cellCandidate.appendChild(wrapper);
     }
+    function getCandidateElectoralVoteDirectValue(candidate) {
+        if (!candidate) return null;
+        const values = [
+            candidate.electoralVotesWon,
+            candidate.electoralVotesEarned,
+            candidate.electoralVotesAwarded,
+            candidate.electoralVotes,
+            candidate.electoralVoteCount,
+            candidate.electoralVote,
+            candidate.electorsWon,
+            candidate.electors,
+            candidate.evWon,
+            candidate.evs,
+            candidate.EV
+        ];
+        for (const value of values) {
+            const number = Number(value);
+            if (Number.isFinite(number) && number >= 0) return Math.round(number);
+        }
+        return null;
+    }
+    function getCandidateElectoralVoteLookupKeys(candidate) {
+        const candidateId = getCandidatePortraitId(candidate);
+        const displayName = getCandidateDisplayName(candidate);
+        return [
+            candidateId,
+            candidate?.id,
+            candidate?.candID,
+            candidate?.candidateId,
+            candidate?.candidateID,
+            candidate?.name,
+            candidate?.fullName,
+            candidate?.displayName,
+            displayName,
+            candidate?.party,
+            candidate?.caucus,
+            candidate?.caucusParty,
+            getCandidatePartyCode(candidate)
+        ].map(value => String(value ?? "").replace(/[^A-Za-z0-9]/g, "").toLowerCase()).filter(Boolean);
+    }
+    function getCandidateMappedElectoralVotes(candidate, district) {
+        if (!candidate || !district) return null;
+        const candidateKeys = getCandidateElectoralVoteLookupKeys(candidate);
+        const maps = [
+            district.electoralVotesByCandidate,
+            district.candidateElectoralVotes,
+            district.electoralVoteResults,
+            district.electoralVotesWon,
+            district.electorResults,
+            district.evResults,
+            district.electorsByCandidate
+        ].filter(Boolean);
+        for (const map of maps) {
+            if (Array.isArray(map)) {
+                for (const item of map) {
+                    if (typeof item === "number") continue;
+                    const itemKeys = getCandidateElectoralVoteLookupKeys(item);
+                    if (!candidateKeys.some(key => itemKeys.includes(key))) continue;
+                    const value = getCandidateElectoralVoteDirectValue(item)
+                        ?? Number(item?.votes ?? item?.count);
+                    if (Number.isFinite(value) && value >= 0) return Math.round(value);
+                }
+                continue;
+            }
+            if (typeof map !== "object") continue;
+            for (const [key, value] of Object.entries(map)) {
+                const normalizedKey = String(key).replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+                if (!candidateKeys.includes(normalizedKey)) continue;
+                const directValue = typeof value === "object"
+                    ? getCandidateElectoralVoteDirectValue(value) ?? Number(value?.votes ?? value?.count)
+                    : Number(value);
+                if (Number.isFinite(directValue) && directValue >= 0) return Math.round(directValue);
+            }
+        }
+        return null;
+    }
+    function getPresidentialStateElectoralVoteAllocation(district, candidates, live) {
+        const allocation = new Map(candidates.map(candidate => [candidate, 0]));
+        const stateId = String(tooltipComponents?.properties?.districtId || activeMap || "").toLowerCase();
+        const totalElectoralVotes = getStateElectoralVotes(stateId);
+        if (totalElectoralVotes <= 0 || candidates.length === 0) return allocation;
+
+        let foundDirectAllocation = false;
+        candidates.forEach(candidate => {
+            const directValue = getCandidateElectoralVoteDirectValue(candidate);
+            const mappedValue = getCandidateMappedElectoralVotes(candidate, district);
+            const value = mappedValue !== null ? mappedValue : directValue;
+            if (value === null || value > totalElectoralVotes) return;
+            allocation.set(candidate, value);
+            foundDirectAllocation = true;
+        });
+        const assignedDirectVotes = [...allocation.values()].reduce((sum, value) => sum + value, 0);
+        const sortedCandidates = candidates.slice().sort((candidateA, candidateB) =>
+            (Number(live ? candidateB?.currentVotes : candidateB?.votes) || 0)
+            - (Number(live ? candidateA?.currentVotes : candidateA?.votes) || 0)
+        );
+        const winner = sortedCandidates[0];
+        if (foundDirectAllocation && assignedDirectVotes === totalElectoralVotes) {
+            return allocation;
+        }
+        candidates.forEach(candidate => allocation.set(candidate, 0));
+
+        const isSplitState = stateId === "me" || stateId === "ne";
+        const runnerUp = sortedCandidates[1];
+        if (isSplitState && runnerUp && totalElectoralVotes > 2) {
+            allocation.set(winner, totalElectoralVotes - 1);
+            allocation.set(runnerUp, 1);
+            return allocation;
+        }
+        allocation.set(winner, totalElectoralVotes);
+        return allocation;
+    }
+    function getCandidateRowColour(candidate, district) {
+        return candidate?.candidateColour
+            || stringifyColour(getCandidateColourForRace(candidate, district));
+    }
+    function applyCandidatePartyBadgeColour(partyBadge, candidate, district) {
+        const raceCandidates = Array.isArray(district?.cands) ? district.cands : [];
+        const candidatePartyKey = getCandidateVariantPartyKey(candidate);
+        const samePartyCandidates = raceCandidates.filter(raceCandidate =>
+            getCandidateVariantPartyKey(raceCandidate) === candidatePartyKey
+        );
+        if (samePartyCandidates.length < 2) return;
+        const candidateColour = getCandidateRowColour(candidate, district);
+        partyBadge.style.setProperty(
+            "background-color",
+            candidateColour,
+            "important"
+        );
+    }
+    function applyProjectedCandidateCellColour(candidateCell, candidate, district) {
+        if (!candidateCell || !candidate) return;
+        const candidateColour = getCandidateRowColour(candidate, district);
+        const visualParty = getCandidateProjectionPartyKey(candidate);
+        candidateCell.style.setProperty("background-color", candidateColour, "important");
+        candidateCell.style.setProperty(
+            "color",
+            visualParty === "ID" || visualParty === "IR" ? "#111" : "#fff",
+            "important"
+        );
+    }
     function createCandidateRow(candidate, district, live, isProjectedWinner, isFirst, rowOptions = {}) {
         const candVotes = live ? candidate.currentVotes : candidate.votes;
         const distVotes = live ? district.totalCurrVotes : district.totalVotes;
@@ -1411,30 +2174,67 @@
         const row = document.createElement("tr");
         const cellCandidate = document.createElement("td");
         cellCandidate.classList.add("cellCandidate");
-        renderCandidateCellContent(cellCandidate, candidate);
+        renderCandidateCellContent(cellCandidate, candidate, {
+            projected: isProjectedWinner,
+
+            showTick: isProjectedWinner && rowOptions.showTick === true,
+            candidateColour: getCandidateRowColour(candidate, district)
+        });
+        if (isProjectedWinner) {
+            applyProjectedCandidateCellColour(cellCandidate, candidate, district);
+        }
         row.appendChild(cellCandidate);
         const cellParty = document.createElement("td");
         const divParty = document.createElement("div");
-        divParty.innerText = candidate.party || "";
+        const partyCode = String(candidate.party || "").toUpperCase();
+        const isIndependentAffiliate = ["I", "ID", "IR", "I-D", "I-R"].includes(partyCode);
+        divParty.innerText = isIndependentAffiliate ? "I" : partyCode;
         if (candidate.party === "R") {
             cellParty.classList.add("party-r");
             divParty.classList.add("letter-party-r");
         } else if (candidate.party === "D") {
             cellParty.classList.add("party-d");
             divParty.classList.add("letter-party-d");
-        } else if (candidate.party === "I") {
+        } else if (isIndependentAffiliate) {
             cellParty.classList.add("party-i");
             divParty.classList.add("letter-party-i");
         }
+        applyCandidatePartyBadgeColour(divParty, candidate, district);
         cellParty.appendChild(divParty);
         row.appendChild(cellParty);
+        if (rowOptions.showElectoralVotes === true) {
+            const cellElectoralVotes = document.createElement("td");
+            cellElectoralVotes.classList.add("cellEVs");
+            cellElectoralVotes.innerText = Math.round(Number(rowOptions.electoralVotes) || 0).toLocaleString("en-US");
+            row.appendChild(cellElectoralVotes);
+        }
         const cellVotes = document.createElement("td");
         cellVotes.classList.add("cellVotes");
         cellVotes.innerText = Math.round(candVotes).toLocaleString("en-US");
         row.appendChild(cellVotes);
         const cellPct = document.createElement("td");
         cellPct.classList.add("cellPct");
-        cellPct.innerText = pct + "%";
+
+        const cellPctValue = document.createElement("span");
+        cellPctValue.className = "bm-pct-value";
+        cellPctValue.textContent = pct + "%";
+        cellPct.appendChild(cellPctValue);
+        if (Number.isFinite(rowOptions.fixedPctDelta)) {
+            const fixedDelta = Math.abs(rowOptions.fixedPctDelta) < 0.005
+                ? 0
+                : rowOptions.fixedPctDelta;
+            const delta = document.createElement("span");
+            delta.className = "bm-rcv-pct-delta";
+            delta.classList.add(
+                fixedDelta > 0
+                    ? "bm-rcv-pct-delta-gain"
+                    : (fixedDelta < 0
+                        ? "bm-rcv-pct-delta-loss"
+                        : "bm-rcv-pct-delta-even")
+            );
+            delta.textContent = ` (${fixedDelta >= 0 ? "+" : ""}${fixedDelta.toFixed(2)})`;
+            cellPct.appendChild(delta);
+        }
         updatePctDeltaBadge(cellPct, candidate, pctNumber, rowOptions);
         row.appendChild(cellPct);
         if (rowOptions.showDelegates === true) {
@@ -1443,13 +2243,35 @@
             cellDelegates.innerText = Math.round(Number(candidate.delegates) || 0).toLocaleString("en-US");
             row.appendChild(cellDelegates);
         }
+
+        try {
+            if (bmResultAnimationsEnabled() && !bmPrefersReducedMotion()) {
+                const animKeyPrefix = rowOptions.deltaKeyPrefix || rowOptions.animKeyPrefix || "race";
+                const animCandId = bmGetCandidateAnimId(candidate);
+                row.dataset.bmAnimKey = `${animKeyPrefix}|${animCandId}`;
+                bmMaybeAnimateValue(
+                    `${animKeyPrefix}|${animCandId}|votes`,
+                    cellVotes,
+                    Math.round(candVotes),
+                    value => Math.round(value).toLocaleString("en-US")
+                );
+                bmMaybeAnimateValue(
+                    `${animKeyPrefix}|${animCandId}|pct`,
+                    cellPctValue,
+                    pctNumber,
+                    value => value.toFixed(2) + "%"
+                );
+            }
+        } catch (error) {}
         return row;
     }
     function createResultsTable(firstColLabel = "State", options = {}) {
         const table = document.createElement("table");
         table.className = "bm-table-results";
         const colGroup = document.createElement("colgroup");
-        const widths = ["112px", "auto", "56px", "96px", "72px"];
+        const widths = ["112px", "auto", "56px"];
+        if (options.showElectoralVotes === true) widths.push("58px");
+        widths.push("96px", options.showFixedPctDelta === true ? "132px" : "72px");
         if (options.showDelegates === true) widths.push("84px");
         widths.forEach(width => {
             const col = document.createElement("col");
@@ -1470,6 +2292,12 @@
         thParty.innerText = "Party";
         thParty.style.textAlign = "center";
         headerRow.appendChild(thParty);
+        if (options.showElectoralVotes === true) {
+            const thElectoralVotes = document.createElement("th");
+            thElectoralVotes.innerText = "EVs";
+            thElectoralVotes.style.textAlign = "right";
+            headerRow.appendChild(thElectoralVotes);
+        }
         const thVotes = document.createElement("th");
         thVotes.innerText = "Votes";
         thVotes.style.textAlign = "right";
@@ -1489,6 +2317,183 @@
         const tbody = document.createElement("tbody");
         table.appendChild(tbody);
         return { table, tbody };
+    }
+    function renderPrecinctResultsTooltip(data = {}) {
+        if (!tooltipComponents.entries) return tooltipDiv;
+        [
+            tooltipComponents.winnerLine,
+            tooltipComponents.header,
+            tooltipComponents.projectedWinnerMessage,
+            tooltipComponents.turnout,
+            tooltipComponents.seatGainMessage,
+            tooltipComponents.earlyCallMessage,
+            tooltipComponents.closeCallMessage,
+            tooltipComponents.noElection,
+            tooltipComponents.notCounting,
+            tooltipComponents.electors
+        ].forEach(element => {
+            if (element) element.style.display = "none";
+        });
+        tooltipDiv.classList.remove("bm-detached-primary-tooltip", "bm-polls-closing-tooltip");
+        tooltipDiv.classList.add("bm-precinct-native-results-tooltip");
+        tooltipComponents.entries.replaceChildren();
+        tooltipComponents.entries.className = "";
+        tooltipComponents.entries.id = "better-maps-tooltip-entries";
+        if (tooltipComponents.properties && data.electionType) {
+            tooltipComponents.properties.electionType = data.electionType;
+        }
+        const requestedStatus = String(data.statusText || "").trim().toUpperCase();
+        const projectedWinner = data.projectedWinner === true
+            || requestedStatus.startsWith("PROJECTED WINNER");
+        if (projectedWinner && tooltipComponents.projectedWinnerMessage) {
+            tooltipComponents.projectedWinnerMessage.style.display = "block";
+            tooltipComponents.projectedWinnerMessage.innerHTML = `
+                <div class="candidate-wrapper">
+                    <span>PROJECTED WINNER</span>
+                    <svg viewBox="0 0 14 14" stroke-width="2" aria-hidden="true" class="winner-icon">
+                        <path fill="none" d="M12,3.5l-6.81,7L2,7.8"></path>
+                    </svg>
+                    ${data.flip === true ? `<div class="flipProjectedWinner"><svg viewBox="0 0 14 14" stroke-width="2" aria-hidden="true" class="winner-iconFLIP"><line x1="7" y1="2" x2="7" y2="12"></line><line x1="2" y1="7" x2="12" y2="7"></line></svg>&nbsp;FLIP</div>` : ""}
+                </div>`;
+        } else if (requestedStatus === "TOO CLOSE TO CALL" && tooltipComponents.closeCallMessage) {
+            tooltipComponents.closeCallMessage.style.display = "block";
+            tooltipComponents.closeCallMessage.textContent = requestedStatus;
+        } else if (requestedStatus && tooltipComponents.earlyCallMessage) {
+            tooltipComponents.earlyCallMessage.style.display = "block";
+            tooltipComponents.earlyCallMessage.textContent = requestedStatus;
+        }
+        if (tooltipComponents.turnout) {
+            const turnoutText = data.showTurnout === true
+                ? (String(data.turnoutText || "").trim()
+                    || (data.sourceRace ? getCountyTurnoutText(data.sourceRace, true) : ""))
+                : "";
+
+            applyTurnoutRow(turnoutText, data.electionType);
+        }
+
+        const candidates = (Array.isArray(data.candidates) ? data.candidates : [])
+            .map(candidate => ({
+                ...(candidate?.source || candidate),
+                portraitSource: candidate?.source || candidate,
+                name: candidate?.name,
+                party: candidate?.party,
+                candidateColour: candidate?.candidateColour,
+                pctDelta: Number.isFinite(Number(candidate?.pctDelta))
+                    ? Number(candidate.pctDelta)
+                    : null,
+                votes: Math.max(0, Math.round(Number(candidate?.votes) || 0)),
+                currentVotes: Math.max(0, Math.round(Number(candidate?.votes) || 0))
+            }))
+            .sort((candidateA, candidateB) => candidateB.votes - candidateA.votes);
+        const totalVotes = Math.max(
+            0,
+            Math.round(Number(data.totalVotes) || candidates.reduce(
+                (sum, candidate) => sum + candidate.votes,
+                0
+            ))
+        );
+        const district = {
+            cands: candidates,
+            totalVotes,
+            totalCurrVotes: totalVotes
+        };
+        const showFixedPctDelta = candidates.some(candidate =>
+            Number.isFinite(candidate.pctDelta)
+        );
+        const { table, tbody } = createResultsTable(
+            data.territoryType || "County",
+            { showFixedPctDelta }
+        );
+        table.classList.add(
+            "bm-general-results-table",
+            "bm-precinct-native-results-table",
+            `bm-general-results-table-${String(data.electionType || "general").toLowerCase()}`
+        );
+        const precinctAnimKeyPrefix = [
+            "precinct",
+            String(data.electionType || "general"),
+            String(data.territoryName || ""),
+            String(data.totalLabel || "")
+        ].join("|");
+        candidates.forEach((candidate, index) => {
+            tbody.appendChild(createCandidateRow(
+                candidate,
+                district,
+                false,
+                projectedWinner && index === 0,
+                index === 0,
+                {
+                    fixedPctDelta: Number.isFinite(candidate.pctDelta)
+                        ? candidate.pctDelta
+                        : null,
+                    deltaKeyPrefix: precinctAnimKeyPrefix,
+
+                    showPctDelta: !showFixedPctDelta,
+
+                    showTick: true
+                }
+            ));
+        });
+        bmAnimateRowReorder(tbody, precinctAnimKeyPrefix);
+
+        if (candidates.length) {
+            const totalRow = document.createElement("tr");
+            totalRow.className = "bm-total-reported-row";
+            const totalLabel = document.createElement("td");
+            totalLabel.className = "bm-total-reported-label";
+            totalLabel.textContent = data.totalLabel || "Total reported";
+            totalRow.appendChild(totalLabel);
+            const totalParty = document.createElement("td");
+            totalParty.className = "bm-total-reported-empty";
+            totalRow.appendChild(totalParty);
+            const totalValue = document.createElement("td");
+            totalValue.className = "bm-total-reported-value";
+            totalValue.textContent = totalVotes.toLocaleString("en-US");
+            totalRow.appendChild(totalValue);
+            const totalPct = document.createElement("td");
+            totalPct.className = "bm-total-reported-empty";
+            totalRow.appendChild(totalPct);
+            tbody.appendChild(totalRow);
+
+            const territoryCell = document.createElement("td");
+            territoryCell.className = "stateCell";
+            territoryCell.rowSpan = tbody.rows.length;
+            territoryCell.style.textAlign = "left";
+            territoryCell.style.verticalAlign = "top";
+            const stateInfo = document.createElement("div");
+            stateInfo.className = "state-info";
+            stateInfo.style.cssText = "margin:0;padding:0;text-align:left;";
+            const territoryName = document.createElement("div");
+            territoryName.className = "state-name";
+            territoryName.textContent = String(data.territoryName || "");
+            stateInfo.appendChild(territoryName);
+            if (data.territoryContext) {
+                const territoryContext = document.createElement("div");
+                territoryContext.className = "state-electors";
+                territoryContext.textContent = data.territoryContext;
+                stateInfo.appendChild(territoryContext);
+            }
+            if (data.reportingText) {
+                const reporting = document.createElement("div");
+                reporting.className = "state-reporting";
+                reporting.textContent = data.reportingText;
+                stateInfo.appendChild(reporting);
+            }
+            const difference = document.createElement("div");
+            difference.className = "state-difference";
+            difference.textContent = `Margin: ${Math.max(0, Math.round(Number(data.marginVotes) || 0)).toLocaleString("en-US")} (${Math.max(0, Number(data.marginPoints) || 0).toFixed(2)}%)`;
+            stateInfo.appendChild(difference);
+            territoryCell.appendChild(stateInfo);
+            tbody.rows[0].insertBefore(territoryCell, tbody.rows[0].firstChild);
+        }
+
+        tooltipComponents.entries.appendChild(table);
+        tooltipDiv.style.setProperty("display", "flex", "important");
+        return tooltipDiv;
+    }
+    function hidePrecinctResultsTooltip() {
+        tooltipDiv.style.setProperty("display", "none", "important");
+        tooltipDiv.classList.remove("bm-precinct-native-results-tooltip");
     }
     function resetHouseStateTooltipMessages() {
         tooltipComponents.winnerLine.setAttribute("style", "display: none;");
@@ -1798,6 +2803,229 @@
             )
             .sort((a, b) => Number(b.year) - Number(a.year))[0];
     }
+    function getOfficeHolderPartyDescriptor(record) {
+        if (!record) return null;
+        if (Array.isArray(record)) {
+            let wrapped = null;
+            try {
+                wrapped = Executive?.data?.characters?.wrapCharacter(record, "candidate");
+            } catch { }
+            const party = wrapped?.extendedAttribs?.party || wrapped?.party || record[0] || null;
+            const caucus = wrapped?.caucusParty
+                || wrapped?.caucus
+                || wrapped?.extendedAttribs?.caucusParty
+                || null;
+            return party ? { party, caucus, caucusParty: caucus } : null;
+        }
+        if (typeof record !== "object") return { party: record };
+        const party = record.party
+            || record.partyId
+            || record.partyID
+            || record.partyName
+            || record.affiliation
+            || record.extendedAttribs?.party
+            || null;
+        const caucus = record.caucusParty
+            || record.caucus
+            || record.extendedAttribs?.caucusParty
+            || null;
+        return party || caucus ? { party: party || "I", caucus, caucusParty: caucus } : null;
+    }
+    function getOfficeHolderStateCode(record) {
+        if (!record) return "";
+        if (Array.isArray(record)) {
+            const stateIndex = Executive?.enums?.characterArray?.candidate?.stateId ?? 127;
+            const direct = String(record[stateIndex] || "").trim().toUpperCase();
+            if (/^[A-Z]{2}$/.test(direct)) return direct;
+            return String(record.find(value =>
+                typeof value === "string"
+                && /^[A-Z]{2}$/.test(value)
+                && Executive?.data?.states?.[value.toLowerCase()]
+            ) || "").toUpperCase();
+        }
+        return String(
+            record.stateId
+            || record.stateID
+            || record.state
+            || record.abbr
+            || record.stateCode
+            || record.extendedAttribs?.stateId
+            || ""
+        ).trim().toUpperCase();
+    }
+    function getRuntimeOfficeHolderArray(name) {
+        const value = readRuntimeValue(name);
+        if (Array.isArray(value)) return value;
+        if (value && typeof value === "object") return Object.values(value).flat();
+        return [];
+    }
+    function getCurrentGovernorParty(stateId) {
+        const stateCode = String(stateId || "").toUpperCase();
+        const sources = [
+            getRuntimeOfficeHolderArray("allGovernors"),
+            Array.isArray(Executive?.data?.allGovernors) ? Executive.data.allGovernors : [],
+            Array.isArray(Executive?.data?.politicians?.governors)
+                ? Executive.data.politicians.governors
+                : Object.values(Executive?.data?.politicians?.governors || {}).flat()
+        ];
+        for (const source of sources) {
+            const holder = source.find(record => getOfficeHolderStateCode(record) === stateCode);
+            const party = getOfficeHolderPartyDescriptor(holder);
+            if (party) return party;
+        }
+        return null;
+    }
+    function getCurrentSenateClassArray() {
+        const raceStates = new Set(
+            (readRuntimeValue("electNightUSS")?.elections || [])
+                .map(race => String(race?.state || race?.stateId || "").toUpperCase())
+                .filter(Boolean)
+        );
+        const classArrays = ["usSenate1Array", "usSenate2Array", "usSenate3Array"]
+            .map(name => getRuntimeOfficeHolderArray(name))
+            .filter(array => array.length);
+        if (!classArrays.length) return [];
+        if (!raceStates.size) return [];
+        return classArrays
+            .map(array => ({
+                array,
+                score: array.reduce((sum, record) =>
+                    sum + (raceStates.has(getOfficeHolderStateCode(record)) ? 1 : 0), 0)
+            }))
+            .sort((a, b) => b.score - a.score)[0]?.array || [];
+    }
+    function getCurrentSenateParty(stateId) {
+        const stateCode = String(stateId || "").toUpperCase();
+        const scheduledClass = getCurrentSenateClassArray();
+        const holder = scheduledClass.find(record => getOfficeHolderStateCode(record) === stateCode);
+        const scheduledParty = getOfficeHolderPartyDescriptor(holder);
+        if (scheduledParty) return scheduledParty;
+
+        const direct = Executive?.data?.politicians?.usSenate;
+        const records = Array.isArray(direct) ? direct : Object.values(direct || {}).flat();
+        const stateRecords = records.filter(record => getOfficeHolderStateCode(record) === stateCode);
+        return stateRecords.length === 1 ? getOfficeHolderPartyDescriptor(stateRecords[0]) : null;
+    }
+    function getCurrentHouseParty(stateId, districtNumber) {
+        const stateCode = String(stateId || "").toUpperCase();
+        const normalizedDistrict = Number(districtNumber);
+        const politicians = Executive?.data?.politicians?.usHouse;
+        let records = politicians?.[stateCode.toLowerCase()]
+            || politicians?.[stateCode]
+            || [];
+        if (!Array.isArray(records)) records = Object.values(records || {});
+        if (!records.length) {
+            records = getRuntimeOfficeHolderArray("usHouse")
+                .filter(record => getOfficeHolderStateCode(record) === stateCode);
+        }
+        const explicit = records.find(record => Number(
+            record?.districtNumber
+            ?? record?.districtNum
+            ?? record?.district
+            ?? record?.houseDistrict
+            ?? record?.extendedAttribs?.district
+        ) === normalizedDistrict);
+        const holder = explicit || records[normalizedDistrict - 1] || null;
+        return getOfficeHolderPartyDescriptor(holder);
+    }
+    function getExplicitPreviousSeatParty(source) {
+        if (!source || typeof source !== "object") return null;
+        const keys = [
+            "incumbentParty", "incumbParty", "previousParty", "priorParty",
+            "oldParty", "lastParty", "seatParty", "holderParty",
+            "defendingParty", "retiringParty", "openSeatParty"
+        ];
+        for (const key of keys) {
+            const party = getOfficeHolderPartyDescriptor(source[key]);
+            if (party) return party;
+        }
+        const holderKeys = [
+            "previousWinner", "previousIncumbent", "incumbent",
+            "officeHolder", "currentHolder", "currentSenator", "senator", "governor"
+        ];
+        for (const key of holderKeys) {
+            const party = getOfficeHolderPartyDescriptor(source[key]);
+            if (party) return party;
+        }
+        return null;
+    }
+    function getFlipComparisonPartyBlock(candidateOrParty) {
+        const rawParty = typeof candidateOrParty === "string"
+            ? candidateOrParty
+            : (
+                getCandidateVariantPartyKey(candidateOrParty)
+                || getCandidateVisualPartyKey(candidateOrParty)
+                || getHouseSummaryParty(candidateOrParty)
+            );
+        const normalized = normalizeCandidatePartyText(rawParty);
+        if (normalized === "D" || normalized === "DEM" || normalized.startsWith("DEMOCRAT")) return "D";
+        if (normalized === "R" || normalized === "REP" || normalized.startsWith("REPUBLICAN")) return "R";
+        if (
+            normalized === "ID"
+            || normalized === "INDD"
+            || normalized.includes("INDEPENDENTDEM")
+            || normalized.includes("INDDEM")
+        ) return "D";
+        if (
+            normalized === "IR"
+            || normalized === "INDR"
+            || normalized.includes("INDEPENDENTREP")
+            || normalized.includes("INDREP")
+        ) return "R";
+        return normalized ? "I" : null;
+    }
+    function getHouseFlipPartyKey(candidateOrParty) {
+        if (typeof candidateOrParty === "string") {
+            const normalized = normalizeCandidatePartyText(candidateOrParty);
+            if (normalized === "ID" || normalized === "INDD" || normalized.includes("INDEPENDENTDEM") || normalized.includes("INDDEM")) return "ID";
+            if (normalized === "IR" || normalized === "INDR" || normalized.includes("INDEPENDENTREP") || normalized.includes("INDREP")) return "IR";
+            if (normalized === "D" || normalized === "DEM" || normalized.startsWith("DEMOCRAT")) return "D";
+            if (normalized === "R" || normalized === "REP" || normalized.startsWith("REPUBLICAN")) return "R";
+            return normalized ? "I" : null;
+        }
+        return getCandidateVariantPartyKey(candidateOrParty)
+            || getCandidateVisualPartyKey(candidateOrParty)
+            || getHouseSummaryParty(candidateOrParty);
+    }
+    function getFlipCandidateIdentity(candidate) {
+        if (!candidate || typeof candidate !== "object") return "";
+        const id = candidate.id
+            ?? candidate.candID
+            ?? candidate.candidateId
+            ?? candidate.candidateID
+            ?? candidate.personId
+            ?? candidate.personID
+            ?? candidate.characterId
+            ?? candidate.characterID
+            ?? candidate.politicianId
+            ?? candidate.politicianID;
+        if (id !== undefined && id !== null && String(id).trim() !== "") return `id:${String(id).trim()}`;
+        const name = String(candidate.name || candidate.fullName || candidate.displayName || "").replace(/\*/g, "").trim().toLowerCase();
+        return name ? `name:${name}` : "";
+    }
+    function getFlipCandidateNameTokens(candidate) {
+        const name = String(candidate?.name || candidate?.fullName || candidate?.displayName || "")
+            .replace(/\*/g, "")
+            .replace(/[^a-zA-Z\s'-]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+        return name ? name.split(/\s+/).filter(Boolean) : [];
+    }
+    function isSameFlipCandidate(candidateA, candidateB) {
+        const identityA = getFlipCandidateIdentity(candidateA);
+        const identityB = getFlipCandidateIdentity(candidateB);
+        if (identityA && identityB && identityA === identityB) return true;
+        const tokensA = getFlipCandidateNameTokens(candidateA);
+        const tokensB = getFlipCandidateNameTokens(candidateB);
+        if (!tokensA.length || !tokensB.length) return false;
+        const nameA = tokensA.join(" ");
+        const nameB = tokensB.join(" ");
+        if (nameA === nameB) return true;
+        if (tokensA.length === 1 && tokensB[tokensB.length - 1] === tokensA[0]) return true;
+        if (tokensB.length === 1 && tokensA[tokensA.length - 1] === tokensB[0]) return true;
+        return false;
+    }
     function getPreviousHouseDistrictWinner(stateId, districtNumber) {
         const previousGeneral = getPreviousHouseGeneralElection();
         const stateName = String(Executive?.data?.states?.[stateId]?.name || "").toLowerCase();
@@ -1813,8 +3041,9 @@
         return Array.isArray(stateSummary?.districts) ? stateSummary.districts : [];
     }
     function getHouseDistrictFlipData(stateId, district, live = true) {
+        const finalized = live !== true || district?.pW === true;
         if (
-            !district?.pW
+            !finalized
             || !Array.isArray(district?.cands)
             || district.cands.length === 0
             || !shouldRevealHouseDistrictResults(district, live)
@@ -1823,16 +3052,37 @@
         }
         const winner = district.cands.slice()
             .sort((a, b) => (Number(b.votes) || 0) - (Number(a.votes) || 0))[0];
-        const districtNumber = Number(district.district);
-        const previousWinner = getPreviousHouseDistrictWinner(String(stateId || "").toLowerCase(), districtNumber)
+        const districtNumber = Number(district.district)
+            || Number(String(
+                district?.district
+                ?? district?.districtNumber
+                ?? district?.districtNum
+                ?? district?.seat
+                ?? ""
+            ).match(/(\d{1,2})(?!.*\d)/)?.[1]);
+        const previousWinner = getCurrentHouseParty(stateId, districtNumber)
+            || getExplicitPreviousSeatParty(district)
+            || getPreviousHouseDistrictWinner(String(stateId || "").toLowerCase(), districtNumber)
             || district.cands.find(candidate => candidate?.incumbent === true);
-        const winnerParty = getHouseSummaryParty(winner);
-        const previousParty = getHouseSummaryParty(previousWinner);
-        const hasExplicitGain = typeof district.gain === "boolean";
+        const winnerParty = getHouseFlipPartyKey(winner);
+        const previousParty = getHouseFlipPartyKey(previousWinner);
+        const winnerBlock = getFlipComparisonPartyBlock(winnerParty || winner);
+        const previousBlock = getFlipComparisonPartyBlock(previousParty || previousWinner);
+        const sameCandidate = isSameFlipCandidate(winner, previousWinner);
+        const computedFlip = Boolean(
+            previousWinner
+            && previousBlock
+            && winnerBlock
+            && previousBlock !== winnerBlock
+            && !sameCandidate
+        );
+        const explicitGainFlip = Boolean(
+            district.gain === true
+            && !sameCandidate
+            && (!previousBlock || !winnerBlock || previousBlock !== winnerBlock)
+        );
         return {
-            flipped: hasExplicitGain
-                ? district.gain
-                : Boolean(previousWinner && previousParty !== winnerParty),
+            flipped: explicitGainFlip || computedFlip,
             winnerParty,
             previousParty
         };
@@ -1866,9 +3116,9 @@
         });
         return counts;
     }
-    function updateHouseDistrictTooltipExtras(stateId, currentDistrict) {
-        if (!currentDistrict?.pW) return;
-        const flipData = getHouseDistrictFlipData(stateId, currentDistrict, true);
+    function updateHouseDistrictTooltipExtras(stateId, currentDistrict, live) {
+        if (live === true && !currentDistrict?.pW) return;
+        const flipData = getHouseDistrictFlipData(stateId, currentDistrict, live);
         if (
             flipData.flipped
             && tooltipComponents.projectedWinnerMessage
@@ -1889,9 +3139,7 @@
         const stateDistrictCount = getHouseDistrictsForState(stateId).length || 1;
         const turnoutText = getStateTurnoutText(totalVotes, stateId, stateDistrictCount);
         if (!turnoutText) return;
-        tooltipComponents.turnout.style.display = "block";
-        tooltipComponents.turnout.className = "state-turnout";
-        tooltipComponents.turnout.textContent = turnoutText;
+        applyTurnoutRow(turnoutText);
     }
     function updateHouseStateTooltip(districtId, force, live) {
         if (tooltipComponents.properties.visible === false) return;
@@ -1961,9 +3209,7 @@
         const allCounted = !live || reportingRatio >= 0.999;
         const turnoutText = allCounted ? getStateTurnoutText(totalVotes) : "";
         if (turnoutText && tooltipComponents.turnout) {
-            tooltipComponents.turnout.style.display = "block";
-            tooltipComponents.turnout.className = "state-turnout";
-            tooltipComponents.turnout.textContent = turnoutText;
+            applyTurnoutRow(turnoutText, "usHouse");
         }
         const previousSeatCounts = !isPrimary
             ? getPreviousHouseSeatCounts(districtId, districts)
@@ -1992,7 +3238,7 @@
             if (index === 0) {
                 const stateCell = document.createElement("td");
                 stateCell.className = "stateCell";
-                stateCell.rowSpan = visibleRows.length;
+                stateCell.rowSpan = visibleRows.length + (allCounted ? 1 : 0);
                 const reportingText = `<div class="state-reporting">${reportingPct}% in</div>`;
                 const marginBlock = marginText
                     ? `<div class="state-difference">${marginText}</div>`
@@ -2018,8 +3264,41 @@
             row.appendChild(votesCell);
             const pctCell = document.createElement("td");
             pctCell.className = "cellPct";
-            pctCell.textContent = `${(totalVotes > 0 ? (partyRow.votes / totalVotes) * 100 : 0).toFixed(2)}%`;
+            const pctPartyNumber = totalVotes > 0 ? (partyRow.votes / totalVotes) * 100 : 0;
+            const pctCellValue = document.createElement("span");
+            pctCellValue.className = "bm-pct-value";
+            pctCellValue.textContent = `${pctPartyNumber.toFixed(2)}%`;
+            pctCell.appendChild(pctCellValue);
             row.appendChild(pctCell);
+
+            updatePctDeltaBadge(
+                pctCell,
+                {
+                    id: partyRow.key,
+                    name: partyRow.key,
+                    party: partyRow.key === "R" || partyRow.key === "D" ? partyRow.key : "i"
+                },
+                pctPartyNumber,
+                { showPctDelta: true, deltaKeyPrefix: `house-state|${districtId}` }
+            );
+            try {
+                if (bmResultAnimationsEnabled() && !bmPrefersReducedMotion()) {
+                    const houseAnimKey = `house-state|${districtId}|${partyRow.key}`;
+                    row.dataset.bmAnimKey = houseAnimKey;
+                    bmMaybeAnimateValue(
+                        `${houseAnimKey}|votes`,
+                        votesCell,
+                        Math.round(partyRow.votes),
+                        value => Math.round(value).toLocaleString("en-US")
+                    );
+                    bmMaybeAnimateValue(
+                        `${houseAnimKey}|pct`,
+                        pctCellValue,
+                        pctPartyNumber,
+                        value => value.toFixed(2) + "%"
+                    );
+                }
+            } catch (error) {}
             if (!isPrimary) {
                 const seatsCell = document.createElement("td");
                 seatsCell.className = "bm-house-seats";
@@ -2043,6 +3322,37 @@
             }
             tbody.appendChild(row);
         });
+        bmAnimateRowReorder(tbody, `house-state|${districtId}`);
+        if (allCounted) {
+            const totalReportedRow = document.createElement("tr");
+            totalReportedRow.className = "bm-total-reported-row";
+            const totalReportedLabel = document.createElement("td");
+            totalReportedLabel.className = "bm-total-reported-label";
+            totalReportedLabel.textContent = "Total reported";
+            totalReportedRow.appendChild(totalReportedLabel);
+            const totalReportedParty = document.createElement("td");
+            totalReportedParty.className = "bm-total-reported-empty";
+            totalReportedRow.appendChild(totalReportedParty);
+            const totalReportedValue = document.createElement("td");
+            totalReportedValue.className = "bm-total-reported-value";
+            totalReportedValue.textContent = Math.round(totalVotes).toLocaleString("en-US");
+            totalReportedRow.appendChild(totalReportedValue);
+            const totalReportedPct = document.createElement("td");
+            totalReportedPct.className = "bm-total-reported-empty";
+            totalReportedRow.appendChild(totalReportedPct);
+            if (!isPrimary) {
+                const totalReportedSeats = document.createElement("td");
+                totalReportedSeats.className = "bm-house-seats bm-total-reported-seats";
+                const totalSeats = visibleRows.reduce((sum, row) => sum + (Number(row.seats) || 0), 0);
+                totalReportedSeats.appendChild(document.createTextNode(`${totalSeats} ${totalSeats === 1 ? "seat" : "seats"}`));
+                const totalSeatSpacer = document.createElement("span");
+                totalSeatSpacer.className = "bm-house-seat-delta bm-house-seat-delta-spacer";
+                totalSeatSpacer.textContent = "(=)";
+                totalReportedSeats.appendChild(totalSeatSpacer);
+                totalReportedRow.appendChild(totalReportedSeats);
+            }
+            tbody.appendChild(totalReportedRow);
+        }
         table.appendChild(tbody);
         tooltipComponents.entries.appendChild(table);
     }
@@ -2154,6 +3464,7 @@
             totalVotes: finalVoteTotal,
             totalCurrVotes: live ? currentVoteTotal : finalVoteTotal,
             cands: newCandArray,
+            colourScope: context.colourScope || context.colorScope || "",
             pW: false
         };
     }
@@ -2202,13 +3513,15 @@
         if (isNonpartisanPrimary) {
             const fakeDistrict = buildHousePrimaryDisplayDistrict(allCandidates, null, live, {
                 stateId,
-                district: currentDistrict?.district
+                district: currentDistrict?.district,
+                colourScope: `house-primary:${String(stateId || "").toLowerCase()}:${currentDistrict?.district || "state"}:N`
             });
             const markNonpartisanAdvancers = live !== true || isProjectedPrimaryGroup(currentDistrict?.allCands);
             createNewEntries(fakeDistrict, live, false, true, false, {
                 markAdvancing: markNonpartisanAdvancers,
                 advancingCount: getNonpartisanPrimaryAdvanceCount("usHouse", currentDistrict, stateId),
                 turnoutVotes: fakeDistrict.totalVotes,
+                variantCandidateColours: true,
                 ...housePrimaryTurnoutOptions
             });
             return;
@@ -2228,7 +3541,8 @@
         if (showDemPrimary) {
             const demFakeDistrict = buildHousePrimaryDisplayDistrict(demCandidates, "D", live, {
                 stateId,
-                district: currentDistrict?.district
+                district: currentDistrict?.district,
+                colourScope: `house-primary:${String(stateId || "").toLowerCase()}:${currentDistrict?.district || "state"}:D`
             });
             createNewEntries(demFakeDistrict, live, false, true, false, {
                 append: renderedPrimarySection,
@@ -2247,7 +3561,8 @@
         if (showRepPrimary) {
             const repFakeDistrict = buildHousePrimaryDisplayDistrict(repCandidates, "R", live, {
                 stateId,
-                district: currentDistrict?.district
+                district: currentDistrict?.district,
+                colourScope: `house-primary:${String(stateId || "").toLowerCase()}:${currentDistrict?.district || "state"}:R`
             });
             createNewEntries(repFakeDistrict, live, false, true, false, {
                 append: renderedPrimarySection,
@@ -2301,7 +3616,7 @@
             return;
         }
         createNewEntries(displayDistrict, live, true, false, false);
-        updateHouseDistrictTooltipExtras(stateId, displayDistrict);
+        updateHouseDistrictTooltipExtras(stateId, displayDistrict, live);
     }
     const BG_THRESHOLD = 5;
     function updateBattlegroundBadge(stateCell, tooltipComponents, countyView, currentDistrict, live) {
@@ -2392,39 +3707,24 @@
         if (tc.panelHost) tc.panelHost.style.display = "none";
     return;
     }
-    let fracIn = NaN;
-    const m = (tc.reporting?.innerText || "").match(/([\d.,]+)\s*%/);
-    if (m) {
-    const num = m[1].replace(/\./g, "").replace(",", ".");
-    fracIn = parseFloat(num) / 100;
-    }
-    if (!Number.isFinite(fracIn) || fracIn <= 0) {
-    fracIn = total > 0 ? (reported / total) : 0;
-    }
-    let expected = Math.round(fracIn > 0 ? (reported / fracIn) : total);
-    const step  = 50000;
+    let expected = total;
+    const getExpectedVoteStep = value => {
+        if (value < 50000) return 1000;
+        if (value < 250000) return 5000;
+        if (value < 1000000) return 10000;
+        if (value < 5000000) return 25000;
+        return 50000;
+    };
+    const step = getExpectedVoteStep(expected);
     const etKey = tc?.properties?.electionType || "";
     const stKey = tc?.properties?.districtId  || "";
-    const pctKey = String(Math.round(fracIn * 1000));
-    const goUp = _stableRandomBool(`${etKey}|${stKey}|${pctKey}`);
-    let expectedRounded = goUp
-    ? Math.ceil(expected / step) * step
-    : Math.floor(expected / step) * step;
+    let expectedRounded = Math.round(expected / step) * step;
     if (expectedRounded < reported) {
     expectedRounded = Math.ceil(Math.max(expected, reported) / step) * step;
     }
     const lockKey = `${et || ""}|${(tc?.properties?.districtId || "").toLowerCase()}`;
     tc.expectedVoteLocks = tc.expectedVoteLocks || Object.create(null);
-    if (typeof tc.expectedVoteLocks[lockKey] === "number") {
-    let locked = tc.expectedVoteLocks[lockKey];
-    if (locked < reported) {
-        locked = Math.ceil(reported / step) * step;
-        tc.expectedVoteLocks[lockKey] = locked;
-    }
-    expectedRounded = locked;
-    } else {
     tc.expectedVoteLocks[lockKey] = expectedRounded;
-    }
     const remaining = Math.max(0, expectedRounded - reported);
     const HIDE_AT = 0.985;
     const SHOW_AGAIN_BELOW = 0.990;
@@ -2521,6 +3821,9 @@
         installPresidentialPrimaryWatchers();
         const activeElementParty = getPresidentialPrimaryPartyFromElement(document.activeElement);
         if (activeElementParty) return rememberPresidentialPrimaryParty(activeElementParty);
+        if (lastPresidentialPrimaryPartyTrusted && lastPresidentialPrimaryParty) {
+            return lastPresidentialPrimaryParty;
+        }
         const demTab = document.getElementById("presElectDemPTab");
         const repTab = document.getElementById("presElectRepPTab");
         const tabLooksOpen = (tab) => {
@@ -2545,6 +3848,9 @@
             if (!lastPresidentialPrimaryPartyTrusted && lowerState.includes("rep")) {
                 return rememberPresidentialPrimaryParty("R", false);
             }
+        }
+        if (demTab && repTab && !lastPresidentialPrimaryPartyTrusted) {
+            return rememberPresidentialPrimaryParty("D", false);
         }
         return lastPresidentialPrimaryParty;
     }
@@ -2588,10 +3894,66 @@
             "runoffCount"
         ];
         const state = Executive?.data?.states?.[(districtId || "").toLowerCase()];
-        const sources = [
+        const candidates = currentDistrict?.allCands?.cands
+            || currentDistrict?.cands
+            || [];
+        const candidateCount = candidates.length;
+        const normalizeCount = (value) => {
+            const count = Math.floor(Number(value));
+            if (!Number.isFinite(count) || count <= 0) return null;
+            return candidateCount > 0 ? Math.min(count, candidateCount) : count;
+        };
+        const isEnabledOption = value =>
+            value === true || value === 1 || String(value || "").toLowerCase() === "true";
+        const nationalNonpartisanPrimary = [
+            readRuntimeValue("junglePrimary"),
+            Executive?.data?.junglePrimary,
+            Executive?.data?.advancedOptions?.junglePrimary
+        ].some(isEnabledOption);
+        const nationalAdvanceCount = [
+            readRuntimeValue("nonPartisanAdv"),
+            Executive?.data?.nonPartisanAdv,
+            Executive?.data?.advancedOptions?.nonPartisanAdv
+        ]
+            .map(normalizeCount)
+            .find(count => count !== null);
+        const stateNonpartisanPrimary = isEnabledOption(state?.junglePrimary);
+        const stateAdvanceCount = [
+            state?.nonPartisanAdv,
+            state?.elections?.nonPartisanAdv,
+            state?.electionOptions?.nonPartisanAdv,
+            state?.options?.nonPartisanAdv
+        ]
+            .map(normalizeCount)
+            .find(count => count !== null);
+        if(nationalNonpartisanPrimary && nationalAdvanceCount !== undefined) {
+            return nationalAdvanceCount;
+        }
+        if(stateNonpartisanPrimary && stateAdvanceCount !== undefined) {
+            return stateAdvanceCount;
+        }
+        if(!stateNonpartisanPrimary && nationalAdvanceCount !== undefined) {
+            return nationalAdvanceCount;
+        }
+        const explicitlyAdvancingCount = candidates.filter(candidate =>
+            candidate?.pW === true
+            || candidate?.PW === true
+            || candidate?.projected === true
+            || candidate?.called === true
+            || candidate?.call === true
+            || candidate?.winnerProjected === true
+            || candidate?.projectedWinner === true
+            || candidate?.advancing === true
+            || candidate?.advances === true
+            || candidate?.qualifiedForGeneral === true
+        ).length;
+        if(explicitlyAdvancingCount > 0) return explicitlyAdvancingCount;
+        const raceSources = [
             currentDistrict,
             currentDistrict?.allCands,
-            currentDistrict?.allPri,
+            currentDistrict?.allPri
+        ];
+        const fallbackSources = [
             state,
             state?.elections,
             state?.electionOptions,
@@ -2599,28 +3961,7 @@
             Executive?.data,
             Executive?.data?.advancedOptions
         ];
-        const candidateCount = currentDistrict?.allCands?.cands?.length
-            || currentDistrict?.cands?.length
-            || 0;
-        const normalizeCount = (value) => {
-            const count = Math.floor(Number(value));
-            if (!Number.isFinite(count) || count <= 0) return null;
-            return candidateCount > 0 ? Math.min(count, candidateCount) : count;
-        };
-        const readGlobalOption = (name) => {
-            try {
-                if (typeof globalThis !== "undefined" && globalThis[name] !== undefined) return globalThis[name];
-            } catch { }
-            try {
-                if (typeof window !== "undefined" && window[name] !== undefined) return window[name];
-            } catch { }
-            try {
-                return Function(`return (typeof ${name} !== "undefined") ? ${name} : undefined;`)();
-            } catch {
-                return undefined;
-            }
-        };
-        for (const source of sources) {
+        for (const source of raceSources) {
             if (!source || typeof source !== "object") continue;
             for (const name of optionNames) {
                 const count = normalizeCount(source[name]);
@@ -2628,8 +3969,15 @@
             }
         }
         for (const name of optionNames) {
-            const count = normalizeCount(readGlobalOption(name));
+            const count = normalizeCount(readRuntimeValue(name));
             if (count !== null) return count;
+        }
+        for (const source of fallbackSources) {
+            if (!source || typeof source !== "object") continue;
+            for (const name of optionNames) {
+                const count = normalizeCount(source[name]);
+                if (count !== null) return count;
+            }
         }
         return candidateCount > 0 ? Math.min(2, candidateCount) : 2;
     }
@@ -2645,6 +3993,46 @@
         if (registered <= 0 || votes <= 0) return "";
         const turnoutPct = Math.max(0, Math.min(100, (votes / registered) * 100));
         return `Turnout: ${turnoutPct.toFixed(1)}%`;
+    }
+
+    function getTurnoutOfficeLabel(electionType) {
+        const key = String(electionType || "");
+        if (/^president/i.test(key)) return "PRESIDENT";
+        if (/^governor/i.test(key)) return "GOVERNOR";
+        if (/^usSenate/i.test(key)) return "SENATE";
+        if (/^usHouse/i.test(key)) return "HOUSE";
+        if (/^mayor/i.test(key)) return "MAYOR";
+        return "";
+    }
+    function applyTurnoutRow(turnoutText, electionTypeOverride) {
+        const element = tooltipComponents.turnout;
+        if (!element) return;
+        const electionType = electionTypeOverride
+            || tooltipComponents?.properties?.electionType
+            || "";
+        const office = getTurnoutOfficeLabel(electionType);
+        const rate = String(turnoutText || "").trim();
+
+        if (!office && !rate) {
+            element.style.display = "none";
+            element.replaceChildren();
+            return;
+        }
+        element.className = office ? "state-turnout bm-turnout-has-office" : "state-turnout";
+        element.replaceChildren();
+        if (office) {
+            const officeSpan = document.createElement("span");
+            officeSpan.className = "bm-turnout-office";
+            officeSpan.textContent = office;
+            element.appendChild(officeSpan);
+        }
+        if (rate) {
+            const rateSpan = document.createElement("span");
+            rateSpan.className = "bm-turnout-rate";
+            rateSpan.textContent = rate;
+            element.appendChild(rateSpan);
+        }
+        element.style.display = "flex";
     }
     function normalizeCountyLookupName(value) {
         return String(value || "")
@@ -2692,6 +4080,12 @@
         return null;
     }
     function getCountyRegisteredVoters(county, stateId) {
+        if(county?.simulatedPrimaryCounty === true) {
+            const simulatedRegistered = Number(county.registeredVoters);
+            if(Number.isFinite(simulatedRegistered) && simulatedRegistered > 0) {
+                return Math.round(simulatedRegistered);
+            }
+        }
         const state = Executive?.data?.states?.[String(stateId || "").toLowerCase()];
         const countyData = findCountyDataByName([
             state?.counties,
@@ -2708,7 +4102,7 @@
         const population = getNamedNumber(countyData, ["pop", "population", "countyPop", "totalPop"])
             || getNamedNumber(county, ["pop", "population", "countyPop", "totalPop"]);
         if (!population) return 0;
-        const directRegistered = getNamedNumber(countyData, [
+        const registeredKeys = [
             "registeredVoters",
             "registered",
             "registeredPopulation",
@@ -2717,7 +4111,9 @@
             "totRegistered",
             "regVoterTotal",
             "registeredVoterTotal"
-        ]);
+        ];
+        const directRegistered = getNamedNumber(countyData, registeredKeys)
+            || getNamedNumber(county, registeredKeys);
         if (directRegistered) {
             return directRegistered <= 100 && population > 1000
                 ? Math.round(population * (directRegistered / 100))
@@ -2736,11 +4132,19 @@
     }
     function getCountyTurnoutText(county, live) {
         const electionType = tooltipComponents?.properties?.electionType;
-        if (!["president", "usSenate", "usHouse", "governor"].includes(electionType)) return "";
-        const totalVotes = Number(county?.totalVotes) || 0;
-        const currentVotes = Number(county?.totalCurrVotes) || 0;
+        if (!["president", "usSenate", "usHouse", "governor", "mayor"].includes(electionType)) return "";
+        const totalVotes = Number(
+            county?.simulatedPrimaryCounty === true
+                ? (county?.turnoutVotes ?? county?.totalVotes)
+                : county?.totalVotes
+        ) || 0;
+        const currentVotes = Number(
+            county?.simulatedPrimaryCounty === true
+                ? (county?.turnoutVotes ?? county?.totalCurrVotes)
+                : county?.totalCurrVotes
+        ) || 0;
         if (totalVotes <= 0) return "";
-        if (live && currentVotes / totalVotes < 0.999) return "";
+        if (live && currentVotes < totalVotes) return "";
         const stateId = county?.stateId || county?.state || activeMap;
         const registered = getCountyRegisteredVoters(county, stateId);
         const votes = Math.round(live ? currentVotes : totalVotes);
@@ -2765,6 +4169,16 @@
     }
     function createNewEntries(currentDistrict, live, fillTop, primary, countyView, options = {}) {
         tooltipComponents.electors.setAttribute("style", "display: none;");
+        if (countyView) {
+            if (tooltipComponents.earlyCallMessage) {
+                tooltipComponents.earlyCallMessage.style.display = "none";
+                tooltipComponents.earlyCallMessage.innerText = "";
+            }
+            if (tooltipComponents.closeCallMessage) {
+                tooltipComponents.closeCallMessage.style.display = "none";
+                tooltipComponents.closeCallMessage.innerText = "";
+            }
+        }
         const candidateFinalVoteTotal = (currentDistrict.cands || []).reduce(
             (total, candidate) => total + (Number(candidate?.votes) || 0),
             0
@@ -2777,10 +4191,18 @@
         const reportedDistrictVotes = live
             ? (Number(currentDistrict.totalCurrVotes) || candidateCurrentVoteTotal)
             : totalDistrictVotes;
-        const percentReported = totalDistrictVotes > 0
-            ? Math.round((reportedDistrictVotes / totalDistrictVotes) * 100)
+        const reportingRatio = totalDistrictVotes > 0
+            ? Math.max(0, reportedDistrictVotes / totalDistrictVotes)
             : 0;
-        tooltipComponents.reporting.innerText = percentReported.toLocaleString() + "% in";
+        const fullyReported = totalDistrictVotes > 0
+            && reportedDistrictVotes >= totalDistrictVotes;
+        const rawReportingPercent = Math.min(100, reportingRatio * 100);
+        const displayedReportingPercent = fullyReported || rawReportingPercent >= 99.95
+            ? "100"
+            : (rawReportingPercent >= 99
+                ? (Math.floor(Math.min(99.9, rawReportingPercent) * 10) / 10).toFixed(1)
+                : Math.round(rawReportingPercent).toLocaleString());
+        tooltipComponents.reporting.innerText = `${displayedReportingPercent}% in`;
         const sortedCands = currentDistrict.cands.slice().sort((a, b) => {
             if (live) return b.currentVotes - a.currentVotes;
             return b.votes - a.votes;
@@ -2800,11 +4222,22 @@
             sortedCands.forEach(cand => {
                 if (cand.currentVotes >= currentHighestTotal) {
                     currentHighestTotal = cand.currentVotes;
-                    currentWinner = cand;
+                currentWinner = cand;
                 }
             });
         }
-        const { table, tbody } = createResultsTable(countyView ? "County" : "State", options);
+        const showElectoralVotes = fullyReported
+            && !primary
+            && !countyView
+            && tooltipComponents?.properties?.electionType === "president";
+        const electoralVoteAllocation = showElectoralVotes
+            ? getPresidentialStateElectoralVoteAllocation(currentDistrict, sortedCands, live)
+            : new Map();
+        const { table, tbody } = createResultsTable(
+            options.territoryLabel || (countyView ? "County" : "State"), {
+            ...options,
+            showElectoralVotes
+        });
         if (primary) {
             table.classList.add("bm-primary-results-table");
             if (options.showDelegates === true) {
@@ -2878,15 +4311,55 @@
             options.sectionParty || (options.markAdvancing === true ? "all" : "main")
         ].join("|");
         sortedCands.forEach((cand, index) => {
-            const isProjectedWinner = !countyView && (cand === (live ? currentWinner : winner));
+            const isProjectedWinner = !countyView
+                && cand === (live ? currentWinner : winner)
+                && (live !== true || currentDistrict.pW === true);
             const row = createCandidateRow(cand, currentDistrict, live, isProjectedWinner, index === 0, {
                 showPctDelta: live,
                 deltaKeyPrefix,
                 compactPctDelta: primary,
-                showDelegates: options.showDelegates === true
+                showDelegates: options.showDelegates === true,
+                showElectoralVotes,
+                electoralVotes: electoralVoteAllocation.get(cand) || 0
             });
             tbody.appendChild(row);
         });
+        bmAnimateRowReorder(tbody, deltaKeyPrefix);
+        if (sortedCands.length > 0 && fullyReported) {
+            const totalReportedVotes = Math.round(live
+                ? (candidateCurrentVoteTotal || reportedDistrictVotes)
+                : (candidateFinalVoteTotal || totalDistrictVotes));
+            const totalReportedRow = document.createElement("tr");
+            totalReportedRow.className = "bm-total-reported-row";
+            const totalReportedLabel = document.createElement("td");
+            totalReportedLabel.className = "bm-total-reported-label";
+            totalReportedLabel.textContent = "Total reported";
+            totalReportedRow.appendChild(totalReportedLabel);
+            const totalReportedParty = document.createElement("td");
+            totalReportedParty.className = "bm-total-reported-empty";
+            totalReportedRow.appendChild(totalReportedParty);
+            if (showElectoralVotes) {
+                const totalReportedElectoralVotes = document.createElement("td");
+                totalReportedElectoralVotes.className = "cellEVs bm-total-reported-electoral-votes";
+                totalReportedElectoralVotes.textContent = [...electoralVoteAllocation.values()]
+                    .reduce((sum, value) => sum + (Number(value) || 0), 0)
+                    .toLocaleString("en-US");
+                totalReportedRow.appendChild(totalReportedElectoralVotes);
+            }
+            const totalReportedValue = document.createElement("td");
+            totalReportedValue.className = "bm-total-reported-value";
+            totalReportedValue.textContent = totalReportedVotes.toLocaleString("en-US");
+            totalReportedRow.appendChild(totalReportedValue);
+            const totalReportedPct = document.createElement("td");
+            totalReportedPct.className = "bm-total-reported-empty";
+            totalReportedRow.appendChild(totalReportedPct);
+            if (options.showDelegates === true) {
+                const totalReportedDelegates = document.createElement("td");
+                totalReportedDelegates.className = "bm-total-reported-empty";
+                totalReportedRow.appendChild(totalReportedDelegates);
+            }
+            tbody.appendChild(totalReportedRow);
+        }
         if (tooltipComponents.seatGainMessage) {
         tooltipComponents.seatGainMessage.style.display = "none";
         tooltipComponents.seatGainMessage.innerHTML = "";
@@ -2963,13 +4436,12 @@
         }
         {
         const tDiv = tooltipComponents.turnout;
-        const countyTurnoutText = countyView && !primary
+        const countyTurnoutText = countyView
+            && (!primary || currentDistrict?.simulatedPrimaryCounty === true)
             ? getCountyTurnoutText(currentDistrict, live)
             : "";
         if (countyTurnoutText && tDiv) {
-            tDiv.style.display = "block";
-            tDiv.className = "state-turnout";
-            tDiv.innerHTML = `<span>${countyTurnoutText}</span>`;
+            applyTurnoutRow(countyTurnoutText);
             return;
         }
         const et = tooltipComponents?.properties?.electionType;
@@ -2977,7 +4449,7 @@
         const tot = totalDistrictVotes;
         const cur = live ? reportedDistrictVotes : tot;
         const reported = (tot > 0) ? (cur / tot) : 0;
-        const allCounted = reported >= 0.999;
+        const allCounted = tot > 0 && cur >= tot;
         const showTurnout = allowed && !primary && !countyView && allCounted && (!live || currentDistrict.pW === true);
         if (!tDiv) {
         } else if (showTurnout) {
@@ -2993,11 +4465,7 @@
             const finalVotes = Math.round(tot);
             if (registered > 0 && finalVotes > 0) {
             const turnoutPct = Math.max(0, Math.min(100, (finalVotes / registered) * 100));
-            const n = (x) => x.toLocaleString("en-US");
-            tDiv.style.display = "block";
-            tDiv.className = "state-turnout";
-            tDiv.innerHTML =
-                `<span>Turnout: ${turnoutPct.toFixed(1)}%</span>`;
+            applyTurnoutRow(`Turnout: ${turnoutPct.toFixed(1)}%`);
             } else {
             tDiv.style.display = "none";
             tDiv.textContent = "";
@@ -3039,8 +4507,12 @@
             if (partyClasses[visualParty]) {
                 candidateCell.classList.add(partyClasses[visualParty]);
             }
-            candidateCell.style.backgroundColor = "";
-            candidateCell.style.color = "";
+            if(showTick) {
+                applyProjectedCandidateCellColour(candidateCell, candidate, currentDistrict);
+            } else {
+                candidateCell.style.backgroundColor = "";
+                candidateCell.style.color = "";
+            }
             if (!showTick) {
                 const party = candidate.party || "I";
                 const stats = advancingPartyStats[party];
@@ -3053,7 +4525,11 @@
                     candidateCell.style.color = strength >= 0.5 ? "#fff" : "#111";
                 }
             }
-            renderCandidateCellContent(candidateCell, candidate, { showTick });
+            renderCandidateCellContent(candidateCell, candidate, {
+                showTick,
+                projected: showTick,
+                candidateColour: getCandidateRowColour(candidate, currentDistrict)
+            });
         };
         if (markPrimaryWinner || markPrimaryAdvancers) {
             const primaryBadge = document.createElement("div");
@@ -3077,7 +4553,7 @@
                 if (!markPrimaryWinner) {
                     tooltipComponents.winnerLine.setAttribute(
                         "style",
-                        `background-color: ${stringifyColour(getCandidateColour(winner))}; height: 10px;`
+                        `background-color: ${stringifyColour(getCandidateColourForRace(winner, currentDistrict))}; height: 10px;`
                     );
                 }
                 const winnerTable = table;
@@ -3095,7 +4571,12 @@
                     if (partyClasses[visualParty]) {
                         winnerCell.classList.add(partyClasses[visualParty]);
                     }
-                renderCandidateCellContent(winnerCell, winner, { showTick: true });
+                    applyProjectedCandidateCellColour(winnerCell, winner, currentDistrict);
+                renderCandidateCellContent(winnerCell, winner, {
+                    showTick: true,
+                    projected: true,
+                    candidateColour: getCandidateRowColour(winner, currentDistrict)
+                });
                 }
                 if (!markPrimaryWinner) {
                     tooltipComponents.projectedWinnerMessage.style.display = "block";
@@ -3110,10 +4591,14 @@
         }
        if (
             winner &&
-            currentDistrict.pW === true &&
-            tooltipComponents.properties.electionType !== "president" &&
-            (tooltipComponents.properties.electionType === "governor" ||
-            tooltipComponents.properties.electionType === "usSenate") &&
+            !primary &&
+            !countyView &&
+            (currentDistrict.pW === true || live !== true) &&
+            (
+                tooltipComponents.properties.electionType === "president"
+                || tooltipComponents.properties.electionType === "governor"
+                || tooltipComponents.properties.electionType === "usSenate"
+            ) &&
             Array.isArray(currentDistrict.cands) && currentDistrict.cands.length > 0
         ) {
             (() => {
@@ -3152,28 +4637,67 @@
                 const curParty  = winner.party;
                 const curCaucus = winner.caucus || winner.caucusParty || null;
                 let prevParty = null, prevCaucus = null;
+                let previousWinnerCandidate = null;
+                if (electionType === "governor" || electionType === "usSenate") {
+                    const officeHolder = electionType === "governor"
+                        ? getCurrentGovernorParty(districtId)
+                        : getCurrentSenateParty(districtId);
+                    prevParty = officeHolder?.party || null;
+                    prevCaucus = officeHolder?.caucus || officeHolder?.caucusParty || null;
+                }
+                if (!prevParty && electionType !== "president") {
+                    const explicitSeatParty = getExplicitPreviousSeatParty(currentDistrict);
+                    prevParty = explicitSeatParty?.party || null;
+                    prevCaucus = explicitSeatParty?.caucus || explicitSeatParty?.caucusParty || null;
+                }
                 try {
-                    let arr = null, gap = null;
-                    if (electionType === "usSenate") { arr = usSenateArchive; gap = 6; }
-                    else if (electionType === "governor") { arr = allGovArchive; gap = 4; }
-                    if (arr && arr.length) {
-                        const lastYear = arr[0].year - gap;
-                        const last = arr.find(a => a.category === "general" && a.year === lastYear);
+                    let arr = null;
+                    if (electionType === "president") {
+                        arr = typeof presidentArchive !== "undefined" ? presidentArchive : globalThis.presidentArchive;
+                    } else if (electionType === "usSenate") {
+                        arr = typeof usSenateArchive !== "undefined" ? usSenateArchive : globalThis.usSenateArchive;
+                    } else if (electionType === "governor") {
+                        arr = typeof allGovArchive !== "undefined" ? allGovArchive : globalThis.allGovArchive;
+                    }
+                    if (!prevParty && arr && arr.length) {
+                        const electionYear = getElectionYear();
+                        const last = arr
+                            .filter(a => a?.category === "general"
+                                && (!Number.isFinite(electionYear) || Number(a.year) < electionYear))
+                            .sort((a, b) => electionType === "usSenate" && Number.isFinite(electionYear)
+                                ? Math.abs(Number(a.year) - (electionYear - 6))
+                                    - Math.abs(Number(b.year) - (electionYear - 6))
+                                : Number(b.year) - Number(a.year))[0];
                         if (last) {
                             const full = Executive.data.states[districtId]?.name || "";
-                            const prevDist = last.elections.find(d => (d.district || "").toLowerCase().trim() === full.toLowerCase().trim());
-                            const prevCands = (prevDist?.cands || prevDist?.candidates || []).slice().sort((a,b)=>b.votes-a.votes);
+                            const prevDist = electionType === "president"
+                                ? (last.exitPoll?.states || last.states || []).find(state =>
+                                    String(state?.name || state?.state || "").toLowerCase().trim()
+                                    === full.toLowerCase().trim()
+                                )
+                                : (last.elections || []).find(d =>
+                                    String(d?.district || "").toLowerCase().trim()
+                                    === full.toLowerCase().trim()
+                                );
+                            const prevCands = (prevDist?.cands || prevDist?.candidates || [])
+                                .slice()
+                                .sort((a,b) =>
+                                    (Number(b.votes ?? b.totVotes) || 0)
+                                    - (Number(a.votes ?? a.totVotes) || 0)
+                                );
                             if (prevCands.length) {
+                                previousWinnerCandidate = prevCands[0];
                                 prevParty  = prevCands[0].party || null;
                                 prevCaucus = prevCands[0].caucus || prevCands[0].caucusParty || null;
                             }
                         }
                     }
                 } catch {}
-                if (!prevParty) {
+                if (!prevParty && electionType !== "president") {
                     try {
                         const inc = (currentDistrict.cands || []).find(c => c.incumbent === true);
                         if (inc) {
+                            previousWinnerCandidate = previousWinnerCandidate || inc;
                             prevParty  = inc.party || null;
                             prevCaucus = inc.caucus || inc.caucusParty || null;
                         }
@@ -3217,13 +4741,35 @@
                         console.warn("[allGovernors] fallback error:", e);
                     }
                 }
-                const flipped = !!prevParty && (
-                    prevParty !== curParty ||
-                    ((prevParty === "I" || curParty === "I") && (prevCaucus !== curCaucus))
+                const currentPartyKey = getCandidateVariantPartyKey({
+                    party: curParty,
+                    caucus: curCaucus,
+                    caucusParty: curCaucus
+                });
+                const previousPartyKey = getCandidateVariantPartyKey({
+                    party: prevParty,
+                    caucus: prevCaucus,
+                    caucusParty: prevCaucus
+                });
+                const currentPartyBlock = getFlipComparisonPartyBlock(currentPartyKey);
+                const previousPartyBlock = getFlipComparisonPartyBlock(previousPartyKey);
+                const sameCandidate = electionType === "president"
+                    ? false
+                    : (
+                        isSameFlipCandidate(winner, previousWinnerCandidate)
+                        || (winner?.incumbent === true && !previousWinnerCandidate)
+                    );
+                const flipped = Boolean(
+                    prevParty
+                    && currentPartyBlock
+                    && previousPartyBlock
+                    && currentPartyBlock !== previousPartyBlock
+                    && !sameCandidate
                 );
                 tooltipComponents.seatGainMessage.style.display = "none";
                 tooltipComponents.seatGainMessage.innerHTML = "";
-                   if (flipped) {
+                if (flipped) {
+                    tooltipComponents.projectedWinnerMessage.style.display = "block";
                     tooltipComponents.projectedWinnerMessage.innerHTML = `
                         <span class="candidate-wrapper">
                             PROJECTED WINNER &nbsp; <svg viewBox="0 0 14 14" stroke-width="2" aria-hidden="true" class="winner-icon">
@@ -3234,7 +4780,6 @@
                                 <line x1="2" y1="7" x2="12" y2="7"></line>
                             </svg>&nbsp;FLIP</div>
                         </span>`;
-                    tooltipComponents.seatGainMessage.style.display = "inline-block";
                     tooltipComponents.seatGainMessage.style.display = "none";
                     tooltipComponents.seatGainMessage.innerHTML = "";
                 } else {
@@ -3268,10 +4813,18 @@
         tooltipComponents.turnout.style.display = "none";
         tooltipComponents.turnout.innerHTML = "";
         }
-        if (reported >= 10 && reported < 65) {
-            if (tooltipComponents.earlyCallMessage) {
-            tooltipComponents.earlyCallMessage.style.display = "block";
-            tooltipComponents.earlyCallMessage.innerText = "TOO EARLY TO CALL";
+        if (reported >= 10 && reported < 65 && baseTotal > 0 && Array.isArray(sortedCands) && sortedCands.length >= 2) {
+            const getTooEarlyThreshold = reportedPct => {
+                if (reportedPct < 25) return 25;
+                if (reportedPct < 45) return 18;
+                return 12;
+            };
+            const topVotes    = live ? (sortedCands[0].currentVotes || 0) : (sortedCands[0].votes || 0);
+            const secondVotes = live ? (sortedCands[1].currentVotes || 0) : (sortedCands[1].votes || 0);
+            const pctDiff     = ((topVotes - secondVotes) / baseTotal) * 100;
+            if (pctDiff <= getTooEarlyThreshold(reported) && tooltipComponents.earlyCallMessage) {
+                tooltipComponents.earlyCallMessage.style.display = "block";
+                tooltipComponents.earlyCallMessage.innerText = "TOO EARLY TO CALL";
             }
         }
         else if (reported >= 65 && baseTotal > 0 && Array.isArray(sortedCands) && sortedCands.length >= 2) {
@@ -3283,7 +4836,7 @@
             const r = Math.max(0, Math.min(1, (reported - start) / (end - start)));
             const k = 1.8;
             const threshold = minThr + (maxThr - minThr) * (1 - Math.pow(r, k));
-        if (pctDiff <= threshold) {
+        if (!countyView && pctDiff <= threshold) {
             tooltipComponents.closeCallMessage.style.display = "block";
             tooltipComponents.closeCallMessage.innerText = "TOO CLOSE TO CALL";
         }
@@ -3304,19 +4857,41 @@
         if (
             electionType === tooltipComponents.properties.electionType &&
             districtId === tooltipComponents.properties.districtId &&
+            countyView === tooltipComponents.properties.countyView &&
             force !== true
         ) {
             return;
         }
         tooltipComponents.properties.electionType = electionType;
         tooltipComponents.properties.districtId = districtId;
+        tooltipComponents.properties.countyView = countyView;
         let currentResults = resultProxies[electionType];
         let currentDistrict = currentResults[districtId];
+        let simulatedPrimaryCountyView = false;
         if (countyView) {
             const actualStDistrict = currentResults[activeMap];
-            if (actualStDistrict === undefined) {
+            const resolvedPrimaryCounty = typeof primaryCountyResultResolver === "function"
+                ? primaryCountyResultResolver(electionType, activeMap, districtId)
+                : null;
+            if(resolvedPrimaryCounty) {
+                currentDistrict = resolvedPrimaryCounty;
+                simulatedPrimaryCountyView = true;
+            } else if (actualStDistrict === undefined) {
                 currentDistrict = undefined;
             } else {
+                const stateExpectedVotes = Number(actualStDistrict.totalVotes)
+                    || (actualStDistrict.cands || []).reduce(
+                        (sum, candidate) => sum + (Number(candidate?.votes) || 0),
+                        0
+                    );
+                const stateCountedVotes = Number(actualStDistrict.totalCurrVotes)
+                    || (actualStDistrict.cands || []).reduce(
+                        (sum, candidate) => sum + (Number(candidate?.currentVotes) || 0),
+                        0
+                    );
+                const stateFullyReported = live === true
+                    && stateExpectedVotes > 0
+                    && stateCountedVotes >= stateExpectedVotes * 0.99999;
                 const origCounty = actualStDistrict.counties.filter(candCounty => {
                     const truncatedName = candCounty.name.substring(0, candCounty.name.lastIndexOf(" "));
                     const replacedName = candCounty.name.toLowerCase().replace(/ /g, "_").replace(/\./g, "");
@@ -3333,7 +4908,7 @@
                     sourceCounty: origCounty,
                     cands: origCounty.cands.map(candObj => {
                         const newCandObj = Object.assign({}, candObj);
-                        if (!live) {
+                        if (!live || stateFullyReported) {
                             newCandObj.currentVotes = newCandObj.votes;
                         } else {
                             const countyElectData = stateElectData.counties.filter(candCountyData => (candCountyData.name === origCounty.name))[0];
@@ -3372,7 +4947,9 @@
             }
         }
         tooltipComponents.title.innerText = countyView
-            ? currentDistrict.name.substring(0, currentDistrict.name.lastIndexOf(" "))
+            ? (/^Ward\s+\d+$/i.test(String(currentDistrict.name || ""))
+                ? currentDistrict.name
+                : currentDistrict.name.substring(0, currentDistrict.name.lastIndexOf(" ")))
             : Executive.data.states[districtId].name.toUpperCase();
         tooltipComponents.winnerLine.setAttribute("style", "display: none;");
         tooltipComponents.notCounting.setAttribute("style", "display: none;");
@@ -3462,6 +5039,7 @@
                     totalVotes: finalVoteTotal,
                     totalCurrVotes: currentVoteTotal,
                     cands: newCandArray,
+                    colourScope: `statewide-primary:${String(districtId || "").toLowerCase()}:N`,
                     pW: false
                 };
                 const markNonpartisanAdvancers = live !== true
@@ -3470,7 +5048,8 @@
                 createNewEntries(fakeDistrict, live, false, true, countyView, {
                     markAdvancing: markNonpartisanAdvancers,
                     advancingCount: getNonpartisanPrimaryAdvanceCount(electionType, currentDistrict, districtId),
-                    turnoutVotes: finalVoteTotal
+                    turnoutVotes: finalVoteTotal,
+                    variantCandidateColours: true
                 });
             } else {
                 const activePresPrimaryParty = electionType === "president"
@@ -3502,6 +5081,9 @@
                         totalVotes: demFinalVoteTotal,
                         totalCurrVotes: demCurrentVoteTotal,
                         cands: newDemCandArray,
+                        colourScope: electionType === "president"
+                            ? "presidential-primary:D"
+                            : `statewide-primary:${String(districtId || "").toLowerCase()}:D`,
                         pW: false
                     };
                     const showDemDelegates = electionType === "president"
@@ -3538,7 +5120,8 @@
                         markWinner: isProjectedPrimaryGroup(currentDistrict?.dem)
                             || isPrimaryGroupFullyCounted(currentDistrict?.dem, live),
                         turnoutVotes: totalPrimaryTurnoutVotes,
-                        showDelegates: showDemDelegates
+                        showDelegates: showDemDelegates,
+                        variantCandidateColours: electionType === "president"
                     });
                     renderedPrimarySection = true;
                 }
@@ -3560,10 +5143,37 @@
                         totalVotes: repFinalVoteTotal,
                         totalCurrVotes: repCurrentVoteTotal,
                         cands: newRepCandArray,
+                        colourScope: electionType === "president"
+                            ? "presidential-primary:R"
+                            : `statewide-primary:${String(districtId || "").toLowerCase()}:R`,
                         pW: false
                     };
                     const showRepDelegates = electionType === "president"
                         && (!live || (repFinalVoteTotal > 0 && (repCurrentVoteTotal / repFinalVoteTotal) >= 0.999));
+                    if (live && repCurrentVoteTotal === 0) {
+                        if (tooltipComponents.seatGainMessage) {
+                            tooltipComponents.seatGainMessage.style.display = "none";
+                            tooltipComponents.seatGainMessage.innerHTML = "";
+                        }
+                        if (tooltipComponents.projectedWinnerMessage) {
+                            tooltipComponents.projectedWinnerMessage.style.display = "none";
+                            tooltipComponents.projectedWinnerMessage.innerHTML = "";
+                        }
+                        if (tooltipComponents.earlyCallMessage) {
+                            tooltipComponents.earlyCallMessage.style.display = "none";
+                            tooltipComponents.earlyCallMessage.innerHTML = "";
+                        }
+                        if (tooltipComponents.closeCallMessage) {
+                            tooltipComponents.closeCallMessage.style.display = "none";
+                            tooltipComponents.closeCallMessage.innerHTML = "";
+                        }
+                        if (tooltipComponents.turnout) {
+                            tooltipComponents.turnout.style.display = "none";
+                            tooltipComponents.turnout.innerHTML = "";
+                        }
+                        showNotCountingMessage();
+                        return;
+                    }
                     createNewEntries(repFakeDistrict, live, false, true, countyView, {
                         append: renderedPrimarySection,
                         sectionLabel: showSectionLabels ? "REPUBLICAN PRIMARY" : "",
@@ -3572,7 +5182,8 @@
                         markWinner: isProjectedPrimaryGroup(currentDistrict?.rep)
                             || isPrimaryGroupFullyCounted(currentDistrict?.rep, live),
                         turnoutVotes: totalPrimaryTurnoutVotes,
-                        showDelegates: showRepDelegates
+                        showDelegates: showRepDelegates,
+                        variantCandidateColours: electionType === "president"
                     });
                 }
             }
@@ -3608,7 +5219,21 @@
                 }
                 showPollClosingMessage(districtId, currentDistrict, electionType);
             } else {
-                createNewEntries(displayDistrict, live, true, false, countyView);
+                createNewEntries(
+                    displayDistrict,
+                    live,
+                    !simulatedPrimaryCountyView,
+                    simulatedPrimaryCountyView,
+                    countyView,
+                    simulatedPrimaryCountyView
+                        ? {
+                            showTurnout: false,
+                            territoryLabel: /^Ward\s+\d+$/i.test(
+                                String(displayDistrict?.name || "")
+                            ) ? "Ward" : "County"
+                        }
+                        : {}
+                );
             }
         }
     }
@@ -3618,7 +5243,12 @@
             visible: true,
             targetDistrict: null,
             electionType: "",
-            districtId: ""
+            districtId: "",
+            countyView: false,
+            hoverClientX: 0,
+            hoverClientY: 0,
+            hoverDistrictId: "",
+            hoverElectionType: ""
         };
         tooltipComponents.expectedVoteLocks = Object.create(null);
         tooltipComponents.winnerLine = document.createElement("div");
@@ -3761,14 +5391,44 @@
         });
         return bestCounts;
     }
+    let latestSenateControlCountsFromPage = null;
+    function cacheSenateControlCountsFromPage(counts) {
+        if (!counts || !Number.isFinite(counts.D) || !Number.isFinite(counts.R)) return null;
+        if (counts.D < 0 || counts.R < 0 || counts.D + counts.R > 100) return null;
+        latestSenateControlCountsFromPage = {
+            D: counts.D,
+            R: counts.R,
+            timestamp: Date.now()
+        };
+        try {
+            globalThis.__betterMapsSenateControlCounts = { ...latestSenateControlCountsFromPage };
+        } catch { }
+        return { D: counts.D, R: counts.R };
+    }
+    function getLatestSenateControlCountsFromPage(maxAgeMs = 120000) {
+        const cached = latestSenateControlCountsFromPage || (() => {
+            try { return globalThis.__betterMapsSenateControlCounts; } catch { return null; }
+        })();
+        if (!cached || !Number.isFinite(cached.D) || !Number.isFinite(cached.R)) return null;
+        if (Number.isFinite(maxAgeMs) && maxAgeMs > 0 && Date.now() - (Number(cached.timestamp) || 0) > maxAgeMs) return null;
+        if (cached.D < 0 || cached.R < 0 || cached.D + cached.R > 100) return null;
+        return { D: cached.D, R: cached.R };
+    }
     function getSenateControlCountsFromPage() {
-        return getPartyControlCountsFromCurrentHeader(/\bSenate Elections\b/i);
+        const headerCounts = getPartyControlCountsFromCurrentHeader(/\bSenate Elections\b/i);
+
+        return cacheSenateControlCountsFromPage(
+            headerCounts || getPartyControlCountsFromPage(100)
+        );
     }
     function getHouseControlCountsFromPage() {
         return getPartyControlCountsFromCurrentHeader(/\bU\.S\. House Elections\b/i);
     }
     function isSenateMidtermControlContext() {
         try {
+            const year = getElectionYear();
+            if (Number.isFinite(year) && year % 4 === 0) return false;
+            if (hasPresidentialGeneralElectionThisCycle()) return false;
             const bodyInnerText = String(document.body?.innerText || "");
             const pageText = bodyInnerText || String(document.body?.textContent || "");
             const hasSenateElectionPage = /\bSenate Elections\b/i.test(pageText);
@@ -3815,10 +5475,15 @@
                 const year = Number(candidate);
                 if (Number.isFinite(year) && year > 1700) return year;
             }
+            const pageYearMatch = String(document.body?.innerText || document.body?.textContent || "").match(/\b(20\d{2}|21\d{2})\b/);
+            if (pageYearMatch) return Number(pageYearMatch[1]);
         } catch { }
         return null;
     }
     function isPresidentialElectionYear() {
+        const year = getElectionYear();
+        if (Number.isFinite(year)) return year % 4 === 0;
+        if (hasPresidentialGeneralElectionThisCycle()) return true;
         try {
             const pageText = String(document.body?.innerText || document.body?.textContent || "");
             const hasSenateElectionPage = /\bSenate Elections\b/i.test(pageText);
@@ -3842,12 +5507,13 @@
             if ((hasSenateElectionPage || hasSenateTab) && !hasPresidentTab && !hasLegacyPresidentTab) return false;
             if (hasPresidentTab || hasLegacyPresidentTab) return true;
         } catch { }
-        const year = getElectionYear();
-        if (Number.isFinite(year)) return year % 4 === 0;
-        return hasPresidentialGeneralElectionThisCycle();
+        return false;
     }
     function getCandidatePartyCode(candidate) {
         if (!candidate) return null;
+        const variantParty = getCandidateVariantPartyKey(candidate);
+        if (variantParty === "D" || variantParty === "ID") return "D";
+        if (variantParty === "R" || variantParty === "IR") return "R";
         return normalizePartyCode(candidate.party)
             || normalizePartyCode(candidate.caucus)
             || normalizePartyCode(candidate.caucusParty)
@@ -3872,11 +5538,22 @@
                 const totalCurrVotes = Number(district.totalCurrVotes) || 0;
                 const totalVotes = Number(district.totalVotes) || 0;
                 const hasFinalCandidateVotes = district.cands.some(candidate => Number(candidate?.votes) > 0);
-                const readyForHouseCount = district.pW === true
+                const readyForHouseCount = district.cands.length === 1
+                    || district.pW === true
+                    || district.projected === true
+                    || district.called === true
+                    || district.cands.some(candidate =>
+                        candidate?.pW === true
+                        || candidate?.projected === true
+                        || candidate?.projectedWinner === true
+                        || candidate?.called === true
+                    )
                     || (totalVotes > 0 && totalCurrVotes >= totalVotes)
                     || (electionNightFinished && hasFinalCandidateVotes);
                 if (!readyForHouseCount) return;
-                const useFinalVotes = district.pW === true || (electionNightFinished && hasFinalCandidateVotes);
+                const useFinalVotes = district.pW === true
+                    || district.cands.length === 1
+                    || (electionNightFinished && hasFinalCandidateVotes);
                 const sortedCands = district.cands.slice().sort((cand1, cand2) =>
                     (Number(cand2[useFinalVotes ? "votes" : "currentVotes"] ?? cand2.votes) || 0)
                     - (Number(cand1[useFinalVotes ? "votes" : "currentVotes"] ?? cand1.votes) || 0)
@@ -3967,10 +5644,63 @@
             if (party || keyText === "d" || keyText === "r") addElectoralTotal(totals, party || keyText.toUpperCase(), value);
         });
     }
+    function getPresidentialNativeScoreText() {
+        try {
+            const overlayText = String(document.getElementById("bm-msnbc-election-overlay")?.innerText || "");
+            const pageText = String(document.body?.innerText || document.body?.textContent || "");
+            const cleanText = overlayText ? pageText.replace(overlayText, "") : pageText;
+            const normalizedText = cleanText.replace(/\s+/g, " ").trim();
+            const titleMatch = normalizedText.match(/\b(?:20\d{2}|21\d{2})\s+Presidential Election\b/i);
+            if (!titleMatch) return normalizedText;
+            return normalizedText.slice(titleMatch.index, titleMatch.index + 500);
+        } catch { }
+        return "";
+    }
+    function getCandidateScoreNames(candidate) {
+        const fullName = String(candidate?.name || candidate?.fullName || candidate?.displayName || "").trim();
+        const pieces = fullName.split(/\s+/).filter(Boolean);
+        const lastName = pieces.length ? pieces[pieces.length - 1] : "";
+        return [fullName, lastName].filter(Boolean).sort((a, b) => b.length - a.length);
+    }
+    function getNativeCandidateElectoralVotes(candidate, sourceText) {
+        for (const name of getCandidateScoreNames(candidate)) {
+            const patternName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const beforeMatch = sourceText.match(new RegExp(`(?:^|\\s)(\\d{1,3})\\s+${patternName}\\b`, "i"));
+            const afterMatch = sourceText.match(new RegExp(`\\b${patternName}\\s+(\\d{1,3})(?:\\s|$)`, "i"));
+            const value = Number(beforeMatch?.[1] ?? afterMatch?.[1]);
+            if (Number.isFinite(value) && value >= 0 && value <= 538) return value;
+        }
+        return null;
+    }
+    function getPresidentialElectoralTotalsFromNativePage() {
+        try {
+            if (!Array.isArray(electNightP?.elections)) return null;
+            const sourceText = getPresidentialNativeScoreText();
+            if (!sourceText) return null;
+            const totals = { D: 0, R: 0 };
+            let found = 0;
+            const firstStateRace = electNightP.elections.find(stateRace =>
+                Array.isArray(stateRace?.cands) && stateRace.cands.length
+            );
+            (firstStateRace?.cands || []).forEach(candidate => {
+                const party = getCandidatePartyCode(candidate);
+                const electoralVotes = getNativeCandidateElectoralVotes(candidate, sourceText);
+                if ((party === "D" || party === "R") && Number.isFinite(electoralVotes)) {
+                    totals[party] += electoralVotes;
+                    found++;
+                }
+            });
+            const total = totals.D + totals.R;
+            return found >= 2 && total > 0 && total <= 538 ? totals : null;
+        } catch { }
+        return null;
+    }
     function getPresidentialElectoralTotalsFromDirectData() {
         const totals = { D: 0, R: 0 };
         try {
             refreshPresidentialElectionNightData();
+            const nativeTotals = getPresidentialElectoralTotalsFromNativePage();
+            if (nativeTotals) return nativeTotals;
             const directSources = [
                 electNightP?.electoralVotes,
                 electNightP?.electoralVote,
@@ -4001,12 +5731,32 @@
         } catch { }
         return null;
     }
+    function getPresidentialElectoralCollegeTotal(totals = null) {
+        try {
+            if (Array.isArray(electNightP?.elections)) {
+                const stateTotal = electNightP.elections.reduce((sum, stateRace) =>
+                    sum + getStateElectoralVotes(stateRace?.state), 0
+                );
+                if (stateTotal > 0) return stateTotal;
+            }
+            const states = Object.values(Executive?.data?.states || {});
+            const executiveTotal = states.reduce((sum, state) =>
+                sum + (Number(state?.electoralNum ?? state?.electoralVotes ?? state?.electors ?? state?.ev) || 0), 0
+            );
+            if (executiveTotal > 0) return executiveTotal;
+        } catch { }
+        return 538;
+    }
+    function getElectoralCollegeNeededVotes(totals = null) {
+        return Math.floor(getPresidentialElectoralCollegeTotal(totals) / 2) + 1;
+    }
     function getElectoralCollegeWinnerParty(totals) {
         if (!totals) return null;
         const demElectors = Number(totals.D) || 0;
         const repElectors = Number(totals.R) || 0;
-        if (demElectors >= 270 && demElectors > repElectors) return "D";
-        if (repElectors >= 270 && repElectors > demElectors) return "R";
+        const neededVotes = getElectoralCollegeNeededVotes(totals);
+        if (demElectors >= neededVotes && demElectors > repElectors) return "D";
+        if (repElectors >= neededVotes && repElectors > demElectors) return "R";
         return null;
     }
     function isPresidentialElectoralDeadlock(totals) {
@@ -4014,8 +5764,8 @@
         const demElectors = Number(totals.D) || 0;
         const repElectors = Number(totals.R) || 0;
         if (getElectoralCollegeWinnerParty(totals)) return false;
-        if (demElectors === 269 && repElectors === 269) return true;
-        return demElectors + repElectors >= 538 && demElectors < 270 && repElectors < 270;
+        const electoralTotal = getPresidentialElectoralCollegeTotal(totals);
+        return demElectors + repElectors >= electoralTotal && demElectors === repElectors;
     }
     function getStateElectoralVotes(stateId) {
         const state = Executive?.data?.states?.[String(stateId || "").toLowerCase()];
@@ -4094,6 +5844,11 @@
             electNightP.elections.forEach(stateRace => {
                 if (!stateRace || !Array.isArray(stateRace.cands)) return;
                 const totalCurrVotes = Number(stateRace.totalCurrVotes) || 0;
+                const candidateCurrentVotes = stateRace.cands.reduce((sum, candidate) =>
+                    sum + Math.max(0, Number(candidate?.currentVotes) || 0), 0
+                );
+                const countedVotes = Math.max(totalCurrVotes, candidateCurrentVotes);
+                if (countedVotes <= 0) return;
                 const totalVotes = Number(stateRace.totalVotes) || 0;
                 const hasFinalCandidateVotes = stateRace.cands.some(candidate => Number(candidate?.votes) > 0);
                 const readyForElectoralCount = stateRace.pW === true
@@ -4118,13 +5873,17 @@
     }
     function getPresidentialCalledElectoralTotals() {
         try {
-            refreshPresidentialElectionNightData();
             if (!Array.isArray(electNightP?.elections)) return null;
             const electoralVotesByParty = { D: 0, R: 0 };
             const electionNightFinished = isElectionNightFinished();
             electNightP.elections.forEach(stateRace => {
                 if (!stateRace || !Array.isArray(stateRace.cands)) return;
                 const totalCurrVotes = Number(stateRace.totalCurrVotes) || 0;
+                const candidateCurrentVotes = stateRace.cands.reduce((sum, candidate) =>
+                    sum + Math.max(0, Number(candidate?.currentVotes) || 0), 0
+                );
+                const countedVotes = Math.max(totalCurrVotes, candidateCurrentVotes);
+                if (countedVotes <= 0) return;
                 const totalVotes = Number(stateRace.totalVotes) || 0;
                 const hasFinalCandidateVotes = stateRace.cands.some(candidate => Number(candidate?.votes) > 0);
                 const readyForElectoralCount = stateRace.pW === true
@@ -4163,12 +5922,13 @@
         if (!counts) return null;
         if (counts.R >= 51 && counts.R > counts.D) return "R";
         if (counts.D >= 51 && counts.D > counts.R) return "D";
+        if (counts.D !== 50 || counts.R !== 50) return null;
         const usePresidentialTieBreaker = !isSenateMidtermControlContext() && isPresidentialElectionYear();
         const tieBreakerParty = usePresidentialTieBreaker
             ? getPresidentialSenateTieBreakerParty()
             : getCurrentPresidentParty();
-        if (tieBreakerParty === "D" && counts.D >= 50) return "D";
-        if (tieBreakerParty === "R" && counts.R >= 50) return "R";
+        if (tieBreakerParty === "D") return "D";
+        if (tieBreakerParty === "R") return "R";
         return null;
     }
     function getHouseControlParty(counts) {
@@ -4177,6 +5937,204 @@
         if (counts.D >= 218 && counts.D > counts.R) return "D";
         return null;
     }
+    function normalizePresidentialIdentityName(value) {
+        return String(value || "")
+            .replace(/\*+$/, "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^A-Za-z0-9]/g, "")
+            .toLowerCase();
+    }
+    function getPresidentialIdentity(candidate) {
+        if (!candidate) return { id: null, names: [] };
+        let wrapped = candidate;
+        if (Array.isArray(candidate)) {
+            try {
+                wrapped = Executive?.data?.characters?.wrapCharacter(candidate, "candidate") || candidate;
+            } catch { }
+        }
+        const id = Array.isArray(candidate)
+            ? getCharacterPortraitId(candidate)
+            : getCandidatePortraitId(candidate);
+        const first = Array.isArray(candidate)
+            ? String(candidate[Executive?.enums?.characterArray?.candidate?.first ?? 4] || "")
+            : String(wrapped?.first || wrapped?.firstName || candidate?.first || candidate?.firstName || "");
+        const last = Array.isArray(candidate)
+            ? String(candidate[Executive?.enums?.characterArray?.candidate?.last ?? 5] || "")
+            : String(wrapped?.last || wrapped?.lastName || candidate?.last || candidate?.lastName || "");
+        const names = [
+            wrapped?.name,
+            wrapped?.fullName,
+            wrapped?.displayName,
+            candidate?.name,
+            candidate?.fullName,
+            candidate?.displayName,
+            [first, last].filter(Boolean).join(" ")
+        ].map(normalizePresidentialIdentityName).filter(Boolean);
+        return { id, names: Array.from(new Set(names)) };
+    }
+    function isPresidentialWinnerIncumbent(candidate) {
+        if (!candidate) return false;
+        if (
+            candidate?.incumbent === true
+            || candidate?.incumbent === 1
+            || String(candidate?.incumbent || "").toLowerCase() === "true"
+            || candidate?.isIncumbent === true
+            || candidate?.inc === true
+            || candidate?.incumb === true
+            || /\*$/.test(String(candidate?.name || candidate?.fullName || "").trim())
+        ) {
+            return true;
+        }
+        const winnerIdentity = getPresidentialIdentity(candidate);
+        const currentPresidentSources = [
+            (typeof usPresident !== "undefined") ? usPresident : null,
+            globalThis?.usPresident,
+            Executive?.data?.usPresident,
+            Executive?.data?.president,
+            Executive?.data?.officeHolders?.president,
+            Executive?.data?.executive?.president,
+            Executive?.data?.federal?.president,
+            Executive?.data?.politicians?.president,
+            Executive?.data?.politicians?.usPresident,
+            Executive?.data?.politicians?.executive?.president
+        ].filter(Boolean);
+        return currentPresidentSources.some(source => {
+            const identity = getPresidentialIdentity(source);
+            if (
+                winnerIdentity.id !== null
+                && identity.id !== null
+                && String(winnerIdentity.id) === String(identity.id)
+            ) {
+                return true;
+            }
+            return winnerIdentity.names.some(name => identity.names.includes(name));
+        });
+    }
+    function getPresidentialElectionWinnerDetails() {
+        const calledTotals = getPresidentialCalledElectoralTotals();
+        let party = getElectoralCollegeWinnerParty(calledTotals);
+        let decidedByHouse = false;
+        if (!party && isPresidentialElectoralDeadlock(calledTotals)) {
+            party = getHouseControlTieBreakerParty();
+            decidedByHouse = party === "D" || party === "R";
+        }
+        if (!party) return null;
+        const firstStateRace = electNightP?.elections?.find(stateRace =>
+            Array.isArray(stateRace?.cands) && stateRace.cands.length
+        );
+        const candidate = firstStateRace?.cands?.find(entry =>
+            getCandidatePartyCode(entry) === party
+        );
+        if (!candidate) return null;
+        const name = String(
+            candidate?.name
+            || candidate?.fullName
+            || [candidate?.firstName, candidate?.lastName].filter(Boolean).join(" ")
+            || ""
+        ).trim().replace(/\*+$/, "").trim();
+        if (!name) return null;
+        const variantParty = getCandidateVariantPartyKey(candidate);
+        return {
+            candidate,
+            name,
+            party,
+            reelected: isPresidentialWinnerIncumbent(candidate),
+            decidedByHouse,
+            colourSide: variantParty === "D" || variantParty === "ID" ? "d" : "r",
+            colour: stringifyColour(getCandidateColour(candidate))
+        };
+    }
+    function escapeControlBannerHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+    function populatePresidentialBannerPortrait(slot, candidate) {
+        if (!slot || !candidate) return;
+        const cacheKey = getCandidatePortraitCacheKey(candidate);
+        slot.dataset.candidatePortraitKey = cacheKey;
+        const installPortrait = () => {
+            if (
+                !slot.isConnected
+                || slot.dataset.candidatePortraitKey !== cacheKey
+            ) return false;
+            const portrait = createCachedBannerCandidatePortrait(cacheKey);
+            if (!portrait) return false;
+            slot.replaceChildren(portrait);
+            return true;
+        };
+        if (installPortrait()) return;
+        let attempts = 0;
+        const waitForPortrait = () => {
+            if (installPortrait()) return;
+            if (!slot.isConnected || attempts >= 60) return;
+            attempts++;
+            setTimeout(waitForPortrait, 50);
+        };
+        requestCandidatePortrait(candidate, () => {
+            if (!installPortrait()) waitForPortrait();
+        });
+        waitForPortrait();
+    }
+    function updatePresidentialWinnerBanner(options = {}) {
+        let banner = document.getElementById("bm-president-elect-banner");
+        const removeBanner = () => {
+            if (!banner) return;
+            banner.classList.remove("show", "president-elect-r", "president-elect-d");
+            banner.innerHTML = "";
+        };
+        if (options.live !== true || options.onCountyMap === true) {
+            removeBanner();
+            return;
+        }
+        const svgMap = options.svgMap
+            || document.getElementById("president-map-live")
+            || document.querySelector('.better-maps-container[data-type="president"]');
+        if (!svgMap || !svgMap.parentElement) {
+            removeBanner();
+            return;
+        }
+        const bannerHost = svgMap.parentElement;
+        document.querySelectorAll(".bm-president-elect-banner-host").forEach(host => {
+            if (host !== bannerHost) host.classList.remove("bm-president-elect-banner-host");
+        });
+        bannerHost.classList.add("bm-president-elect-banner-host");
+        if (!banner) {
+            banner = document.createElement("div");
+            banner.id = "bm-president-elect-banner";
+        }
+        if (banner.parentElement !== bannerHost) bannerHost.appendChild(banner);
+        const winner = getPresidentialElectionWinnerDetails();
+        if (!winner) {
+            removeBanner();
+            return;
+        }
+        banner.className = `show president-elect-${winner.colourSide}`;
+        banner.style.setProperty("--bm-president-elect-colour", winner.colour);
+        banner.innerHTML = `
+            <div class="bm-president-elect-portrait">
+                <span class="bm-president-elect-portrait-slot" aria-hidden="true"></span>
+            </div>
+            <div class="bm-president-elect-copy">
+                <div class="bm-president-elect-label">
+                    <svg viewBox="0 0 14 14" stroke-width="2" aria-hidden="true">
+                        <path fill="none" d="M12,3.5l-6.81,7L2,7.8"></path>
+                    </svg>
+                    <span>${winner.reelected ? "RE-ELECTED PRESIDENT" : "PRESIDENT-ELECT"}</span>
+                </div>
+                <div class="bm-president-elect-name">${escapeControlBannerHtml(winner.name)}</div>
+            </div>
+        `;
+        populatePresidentialBannerPortrait(
+            banner.querySelector(".bm-president-elect-portrait-slot"),
+            winner.candidate
+        );
+    }
+    let senateControlBannerPostRenderTimer = null;
     function updateSenateControlBanner(options = {}) {
         let banner = document.getElementById("bm-senate-banner");
         const removeBanner = () => {
@@ -4192,6 +6150,18 @@
         if (!svgMap || !svgMap.parentElement) {
             removeBanner();
             return;
+        }
+        if (options.postRenderRefresh !== false) {
+            clearTimeout(senateControlBannerPostRenderTimer);
+            senateControlBannerPostRenderTimer = setTimeout(() => {
+                senateControlBannerPostRenderTimer = null;
+                if (!svgMap.isConnected) return;
+                updateSenateControlBanner({
+                    ...options,
+                    svgMap,
+                    postRenderRefresh: false
+                });
+            }, 120);
         }
         const oldWrapper = svgMap.parentElement.classList?.contains("bm-map-svg-wrapper")
             ? svgMap.parentElement
@@ -4220,17 +6190,19 @@
             return;
         }
         const partyClass = party === "R" ? "senate-control-r" : (party === "D" ? "senate-control-d" : "senate-control-t");
-        const partyText = party === "R" ? "REPUBLICAN" : (party === "D" ? "DEMOCRATIC" : "TIED");
+        const partyText = party === "R" ? "REPUBLICANS" : (party === "D" ? "DEMOCRATS" : "TIED");
         banner.className = `show ${partyClass}`;
         banner.innerHTML = `
-            <span class="bm-senate-control-check" aria-hidden="true">
-                <svg viewBox="0 0 14 14" stroke-width="2.5">
-                    <path fill="none" d="M12,3.5l-6.81,7L2,7.8"></path>
-                </svg>
-            </span>
-            <span>SENATE</span>
-            <span class="bm-senate-control-divider"></span>
-            <span>${partyText} CONTROL</span>
+            <div class="bm-control-banner-capitol" aria-hidden="true"></div>
+            <div class="bm-control-banner-copy">
+                <div class="bm-control-banner-label">
+                    <svg viewBox="0 0 14 14" stroke-width="2" aria-hidden="true">
+                        <path fill="none" d="M12,3.5l-6.81,7L2,7.8"></path>
+                    </svg>
+                    <span>SENATE CONTROL</span>
+                </div>
+                <div class="bm-control-banner-party">${partyText}</div>
+            </div>
         `;
     }
     function updateHouseControlBanner(options = {}) {
@@ -4277,17 +6249,19 @@
             return;
         }
         const partyClass = party === "R" ? "house-control-r" : (party === "D" ? "house-control-d" : "house-control-t");
-        const partyText = party === "R" ? "REPUBLICAN" : (party === "D" ? "DEMOCRATIC" : "TIED");
+        const partyText = party === "R" ? "REPUBLICANS" : (party === "D" ? "DEMOCRATS" : "TIED");
         banner.className = `show ${partyClass}`;
         banner.innerHTML = `
-            <span class="bm-senate-control-check" aria-hidden="true">
-                <svg viewBox="0 0 14 14" stroke-width="2.5">
-                    <path fill="none" d="M12,3.5l-6.81,7L2,7.8"></path>
-                </svg>
-            </span>
-            <span>HOUSE</span>
-            <span class="bm-senate-control-divider"></span>
-            <span>${partyText} CONTROL</span>
+            <div class="bm-control-banner-capitol" aria-hidden="true"></div>
+            <div class="bm-control-banner-copy">
+                <div class="bm-control-banner-label">
+                    <svg viewBox="0 0 14 14" stroke-width="2" aria-hidden="true">
+                        <path fill="none" d="M12,3.5l-6.81,7L2,7.8"></path>
+                    </svg>
+                    <span>HOUSE CONTROL</span>
+                </div>
+                <div class="bm-control-banner-party">${partyText}</div>
+            </div>
         `;
     }
     function refreshVisibleControlBanners() {
@@ -4310,6 +6284,15 @@
                     svgMap: houseMap
                 });
             }
+            const presidentMap = document.getElementById("president-map-live");
+            if (presidentMap) {
+                const source = String(presidentMap.getAttribute("data-source") || "");
+                updatePresidentialWinnerBanner({
+                    live: true,
+                    onCountyMap: /[\\\/]counties[\\\/]/i.test(source),
+                    svgMap: presidentMap
+                });
+            }
         } catch { }
     }
     module.exports = {
@@ -4324,7 +6307,18 @@
         hasVisibleHouseStateResults,
         refreshLiveStateResultsForTooltip,
         createTooltip,
+        getSenateControlCountsFromPage,
+        getLatestSenateControlCountsFromPage,
+        getCurrentSenateParty,
         updateSenateControlBanner,
-        updateHouseControlBanner
+        updateHouseControlBanner,
+        updatePresidentialWinnerBanner,
+        getCandidateBannerPortraitSource,
+        getActivePresidentialPrimaryParty,
+        renderPrecinctResultsTooltip,
+        hidePrecinctResultsTooltip,
+        setPrimaryCountyResultResolver: resolver => {
+            primaryCountyResultResolver = typeof resolver === "function" ? resolver : null;
+        }
     };
 };

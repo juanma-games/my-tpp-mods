@@ -10,5 +10,6 @@
         "HouseTie": {"h": 0, "s": 2, "l": 78}
     },
     "showPanePartyID": true,
-    "useRelativeColourScale": false
+    "useRelativeColourScale": false,
+    "animateTooltipResults": true
 }
