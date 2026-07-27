@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 1306 847.8"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -244,7 +244,43 @@
        id="Aleutians_West"
        inkscape:label="#path14021"
        inkscape:connector-curvature="0" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none">
+    <g class="city lvl1" data-x="1143.3" data-y="674.8" transform="translate(1143.3 674.8)">
+      <circle r="6.9" fill="#111111" stroke="#ffffff" stroke-width="3.4"/>
+      <text x="-14.3" y="8" text-anchor="end" font-size="23" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="5.5" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Juneau</text>
+    </g>
+    <g class="city lvl1" data-x="825.3" data-y="549.1" transform="translate(825.3 549.1)">
+      <circle r="6.9" fill="#111111" stroke="#ffffff" stroke-width="3.4"/>
+      <text x="14.3" y="8" text-anchor="start" font-size="23" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="5.5" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Anchorage</text>
+    </g>
+    <g class="city lvl2" data-x="899.6" data-y="391" transform="translate(899.6 391)" display="none">
+      <circle r="6.9" fill="#111111" stroke="#ffffff" stroke-width="3.4"/>
+      <text x="14.3" y="8" text-anchor="start" font-size="23" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="5.5" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Fairbanks</text>
+    </g>
+    <g class="city lvl2" data-x="594.9" data-y="333.4" transform="translate(594.9 333.4)" display="none">
+      <circle r="6.9" fill="#111111" stroke="#ffffff" stroke-width="3.4"/>
+      <text x="14.3" y="8" text-anchor="start" font-size="23" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="5.5" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Nome</text>
+    </g>
+    <g class="city lvl3" data-x="1247.3" data-y="780.7" transform="translate(1247.3 780.7)" display="none">
+      <circle r="6.9" fill="#111111" stroke="#ffffff" stroke-width="3.4"/>
+      <text x="-14.3" y="8" text-anchor="end" font-size="23" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="5.5" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Ketchikan</text>
+    </g>
+    <g class="city lvl3" data-x="613.3" data-y="517.2" transform="translate(613.3 517.2)" display="none">
+      <circle r="6.9" fill="#111111" stroke="#ffffff" stroke-width="3.4"/>
+      <text x="14.3" y="8" text-anchor="start" font-size="23" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="5.5" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Bethel</text>
+    </g>
+    <g class="city lvl3" data-x="707.3" data-y="695.2" transform="translate(707.3 695.2)" display="none">
+      <circle r="6.9" fill="#111111" stroke="#ffffff" stroke-width="3.4"/>
+      <text x="14.3" y="8" text-anchor="start" font-size="23" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="5.5" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Kodiak</text>
+    </g>
+    <g class="city lvl3" data-x="752.3" data-y="108.3" transform="translate(752.3 108.3)" display="none">
+      <circle r="6.9" fill="#111111" stroke="#ffffff" stroke-width="3.4"/>
+      <text x="14.3" y="8" text-anchor="start" font-size="23" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="5.5" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Utqiagvik</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
   <g
      id="g7"
      transform="translate(0,21.000009)">
@@ -263,4 +299,46 @@
      d=""
      style="fill:#283681;fill-opacity:1"
      inkscape:connector-curvature="0" />
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

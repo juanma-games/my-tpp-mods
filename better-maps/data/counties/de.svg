@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 400 810"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -69,5 +69,63 @@
        transform="translate(197,-5)"
        d="m 134.27148,6.5 -10.2539,0.8652344 -10.42969,1.9609375 -10.72656,3.1933591 -9.417971,4.109375 -10.265625,5.744141 -6.728515,4.810547 -6.998047,6.052734 -4.460938,4.480469 -7.708984,9.291015 -3.849609,5.824219 -5.794922,11.332031 -3.460938,8.935547 a 0.50005,0.50005 0 0 1 -0.46875,0.320313 l -6.085937,-0.02734 0.03906,12.246094 a 0.50005,0.50005 0 0 1 0,0.0059 l -0.220703,24.037114 0.490235,11.92382 2.759765,50.15625 8.640625,145.28516 19.726563,-1.35547 a 0.50005,0.50005 0 0 1 0.08398,0.002 l 13.289063,1.34961 a 0.50005,0.50005 0 0 1 0.27539,0.11719 l 4.296875,3.66211 6.378906,-0.62891 a 0.50005,0.50005 0 0 1 0.101563,0 l 2.458984,0.25586 5.89257,-5.65039 a 0.50005,0.50005 0 0 1 0.35352,-0.13867 l 3.51953,0.0469 5.70703,-4.92578 a 0.50005,0.50005 0 0 1 0.42188,-0.11133 l 5.70898,1.11524 6.71289,-1.98438 a 0.50005,0.50005 0 0 1 0.37891,0.0391 l 2.86523,1.54297 3.98633,-2.46875 2.53711,-5.55273 -0.125,-2.87891 a 0.50005,0.50005 0 0 1 0.22461,-0.43945 l 5.47461,-3.60547 -0.44727,-3.12109 -1.34375,-1.95313 a 0.50005,0.50005 0 0 1 -0.008,-0.55469 l 1.5,-2.32031 a 0.50005,0.50005 0 0 1 0.33203,-0.2207 l 5.15235,-0.91602 1.51172,-1.91992 a 0.50005,0.50005 0 0 1 0.71484,-0.0742 l 2.15625,1.81836 2.99219,-3.99609 a 0.50005,0.50005 0 0 1 0.37304,-0.19922 l 2.95899,-0.16016 3.72265,-3.72265 -1.42773,-6.85547 -2.30273,-1.78711 a 0.50005,0.50005 0 0 1 -0.18555,-0.30664 l -1.01758,-5.63086 -5.48242,-10.17969 a 0.50005,0.50005 0 0 1 -0.041,-0.10547 l -1.0957,-3.9668 -7.62695,-7.85156 -7.07032,-4.89258 a 0.50005,0.50005 0 0 1 -0.20898,-0.33789 l -0.52539,-3.56445 -3.05078,-3.00195 a 0.50005,0.50005 0 0 1 -0.0566,-0.0664 l -4.11914,-5.76953 a 0.50005,0.50005 0 0 1 -0.0684,-0.13477 l -1.28125,-3.89062 a 0.50005,0.50005 0 0 1 -0.0234,-0.13281 l -0.32031,-6.67969 a 0.50005,0.50005 0 0 1 0.0312,-0.19727 l 2.33008,-6.31836 0.0391,-3.38281 a 0.50005,0.50005 0 0 1 0.0859,-0.27734 l 5.02929,-7.33399 1.7793,-4.4375 0.88672,-5.74023 0.45898,-7.65625 a 0.50005,0.50005 0 0 1 0.006,-0.0508 l 1.67969,-10.3086 a 0.50005,0.50005 0 0 1 0.0527,-0.1582 l 0.96485,-1.7793 -3.49414,-2.89843 a 0.50005,0.50005 0 0 1 -0.0273,-0.0234 l -6.67969,-6.42969 a 0.50005,0.50005 0 0 1 -0.0215,-0.0234 l -5.24414,-5.72851 -1.91602,0.0801 a 0.50005,0.50005 0 0 1 -0.41992,-0.19727 l -3.67968,-4.87109 a 0.50005,0.50005 0 0 1 -0.0957,-0.21875 l -0.84961,-5.04883 a 0.50005,0.50005 0 0 1 0.043,-0.30078 l 0.99609,-2.07227 -1.48632,-3.11523 a 0.50005,0.50005 0 0 1 -0.0156,-0.39453 l 1.32031,-3.44922 a 0.50005,0.50005 0 0 1 0.0488,-0.0977 l 11.08985,-16.67969 a 0.50005,0.50005 0 0 1 0.23632,-0.18945 l 8.07032,-3.14062 a 0.50005,0.50005 0 0 1 0.16015,-0.0332 l 2.76172,-0.10937 23.53516,-36.166013 8.38281,-19.910156 a 0.50005,0.50005 0 0 1 0.0195,-0.03906 l 9.67969,-18.220703 a 0.50005,0.50005 0 0 1 0.19141,-0.199219 l 19.375,-11.183594 -1.41407,-1.03125 -11.35937,-6.351562 -12.16211,-5.048828 -7.77344,-2.4062505 -8.6543,-1.7304687 -9.24023,-1.0957032 z m 2.78516,120.53711 -2.82226,2.17969 1.50781,6.15625 2.36133,4.54687 1.85156,-0.23242 -1.55664,-9.99219 z m -6.41406,18.23242 1.57031,4.67969 2.46094,1.39844 1.25976,-1.67774 z"
        style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#cccccc;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,197,-5)">
+    <g class="city lvl1" data-x="149.3" data-y="432.3" transform="translate(149.3 432.3)">
+      <circle r="3.6" fill="#111111" stroke="#ffffff" stroke-width="1.8"/>
+      <text x="7.4" y="4.2" text-anchor="start" font-size="12" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.9" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Dover</text>
+    </g>
+    <g class="city lvl1" data-x="118" data-y="85.1" transform="translate(118 85.1)">
+      <circle r="3.6" fill="#111111" stroke="#ffffff" stroke-width="1.8"/>
+      <text x="7.4" y="4.2" text-anchor="start" font-size="12" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.9" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Wilmington</text>
+    </g>
+    <g class="city lvl2" data-x="216.9" data-y="657.3" transform="translate(216.9 657.3)" display="none">
+      <circle r="3.6" fill="#111111" stroke="#ffffff" stroke-width="1.8"/>
+      <text x="7.4" y="4.2" text-anchor="start" font-size="12" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.9" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Georgetown</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

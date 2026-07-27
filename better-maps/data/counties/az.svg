@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 810"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -113,5 +113,83 @@
        style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#cccccc;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
        d="m 739.97266,642.17383 2.75781,110.11914 0.98828,42.08398 -26.97656,0.47266 a 0.50005,0.50005 0 0 0 -0.002,0 l -66.27148,1.41016 -20.53711,0.5 -16.81641,0.16015 a 0.50005,0.50005 0 0 0 -0.004,0 l -37.8711,0.7207 -0.39062,-18.67968 -0.23438,-19.66992 0.52539,-0.0117 a 0.50005,0.50005 0 0 0 0.49024,-0.50586 L 575.40039,742.35742 575.25,718.01758 a 0.50005,0.50005 0 0 0 0,-0.006 l -0.41992,-24.42774 0.26953,-8.10742 a 0.50005,0.50005 0 0 0 0,-0.0215 l -0.13867,-16.25977 a 0.50005,0.50005 0 0 0 -0.39844,-0.48437 l -0.32422,-23.33008 11.61133,-0.0117 a 0.50005,0.50005 0 0 0 0.01,0 l 81.4707,-1.5 a 0.50005,0.50005 0 0 0 0.004,0 l 27.45508,-0.73828 24.27539,-0.19141 a 0.50005,0.50005 0 0 0 0.0176,0 l 13.48438,-0.57031 z"
        id="Cochise" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="404.3" data-y="514.9" transform="translate(404.3 514.9)">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Phoenix</text>
+    </g>
+    <g class="city lvl1" data-x="503.9" data-y="714.3" transform="translate(503.9 714.3)">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Tucson</text>
+    </g>
+    <g class="city lvl2" data-x="390.7" data-y="247" transform="translate(390.7 247)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Flagstaff</text>
+    </g>
+    <g class="city lvl2" data-x="149.4" data-y="573.4" transform="translate(149.4 573.4)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Yuma</text>
+    </g>
+    <g class="city lvl3" data-x="348.4" data-y="331.3" transform="translate(348.4 331.3)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Prescott</text>
+    </g>
+    <g class="city lvl3" data-x="208.8" data-y="223.4" transform="translate(208.8 223.4)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Kingman</text>
+    </g>
+    <g class="city lvl3" data-x="664" data-y="724.9" transform="translate(664 724.9)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="-11.2" y="6.3" text-anchor="end" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Sierra Vista</text>
+    </g>
+    <g class="city lvl3" data-x="474.7" data-y="573" transform="translate(474.7 573)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Casa Grande</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

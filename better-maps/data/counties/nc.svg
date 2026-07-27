@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 316"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -462,5 +462,87 @@
        style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#cccccc;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
        d="m 707.44141,24.984375 0.43164,1.132813 a 0.50005,0.50005 0 0 0 0.0449,0.08984 l 4.24023,6.691407 a 0.50005,0.50005 0 0 0 0.01,0.01367 l 1.85742,2.71875 0.56836,1.78125 a 0.50005,0.50005 0 0 0 0.30469,0.31836 l 5.0039,1.832031 1.24024,1.882812 a 0.50005,0.50005 0 0 0 0.51758,0.214844 l 0.66211,-0.136718 0.28515,1.039062 a 0.50005,0.50005 0 0 0 0.0527,0.123047 l 1.11328,1.880859 -0.23828,0.917969 a 0.50005,0.50005 0 0 0 0.1289,0.476563 l 1.60938,1.638671 a 0.50005,0.50005 0 0 0 0.10742,0.08398 l 1.07422,0.615234 0.89453,2.134766 a 0.50005,0.50005 0 0 0 0.0625,0.107422 l 1.57812,2.089843 a 0.50005,0.50005 0 0 0 0.15235,0.132813 l 1.17383,0.671875 -0.58594,0.738281 -3.62109,-0.939453 -4.52735,-1.857422 -1.21094,-1.011719 a 0.50005,0.50005 0 0 0 -0.24804,-0.109375 l -3.23047,-0.480468 a 0.50005,0.50005 0 0 0 -0.16211,0.002 l -0.91814,0.16793 -1.38281,-2.320312 a 0.50005,0.50005 0 0 0 -0.13867,-0.152344 l -4.33985,-3.109375 a 0.50005,0.50005 0 0 0 -0.26758,-0.0918 l -1.48047,-0.07031 a 0.50005,0.50005 0 0 0 -0.49609,0.339844 l -0.28125,0.830078 a 0.50005,0.50005 0 0 0 0.14453,0.535156 l 5.61719,4.908203 2.23633,2.275391 a 0.50005,0.50005 0 0 0 0.44726,0.142578 l 1.87696,-0.351563 0.46289,0.949219 a 0.50005,0.50005 0 0 0 0.26367,0.244141 l 1.69531,0.673828 -0.32226,0.925781 -1.69141,-0.296875 a 0.50005,0.50005 0 0 0 -0.22266,0.01172 l -5.67382,1.601562 -2.75,0.01758 -1.26563,-1.130859 A 0.50005,0.50005 0 0 0 708.0625,55.77344 l -1.76172,-0.560547 a 0.50005,0.50005 0 0 0 -0.46484,0.08789 l -0.92774,0.751953 -1.78515,-1.162109 a 0.50005,0.50005 0 0 0 -0.36524,-0.07227 l -1.77734,0.335938 -1.63477,-0.589844 -1.01367,-0.947265 -1.81445,-13.65625 0.18359,-0.847657 1.06641,-0.828125 a 0.50005,0.50005 0 0 0 0.1875,-0.322265 l 0.58008,-3.939453 a 0.50005,0.50005 0 0 0 -0.004,-0.16211 l -0.29297,-1.636719 0.50391,-1.236328 a 0.50005,0.50005 0 0 0 0.0371,-0.167969 l 0.11718,-2.917968 1.48633,-0.603516 z"
        id="Perquimans" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="520.2" data-y="95.9" transform="translate(520.2 95.9)">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="6.8" y="3.8" text-anchor="start" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Raleigh</text>
+    </g>
+    <g class="city lvl1" data-x="323.8" data-y="153.5" transform="translate(323.8 153.5)">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="6.8" y="3.8" text-anchor="start" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Charlotte</text>
+    </g>
+    <g class="city lvl2" data-x="416.2" data-y="64.8" transform="translate(416.2 64.8)" display="none">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="6.8" y="3.8" text-anchor="start" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Greensboro</text>
+    </g>
+    <g class="city lvl3" data-x="373" data-y="60" transform="translate(373 60)" display="none">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="-6.8" y="3.8" text-anchor="end" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Winston-Salem</text>
+    </g>
+    <g class="city lvl3" data-x="499.2" data-y="68.1" transform="translate(499.2 68.1)" display="none">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="0" y="-8.2" text-anchor="middle" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Durham</text>
+    </g>
+    <g class="city lvl2" data-x="589.1" data-y="274.7" transform="translate(589.1 274.7)" display="none">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="6.8" y="3.8" text-anchor="start" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Wilmington</text>
+    </g>
+    <g class="city lvl2" data-x="170.1" data-y="109.5" transform="translate(170.1 109.5)" display="none">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="6.8" y="3.8" text-anchor="start" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Asheville</text>
+    </g>
+    <g class="city lvl3" data-x="504.2" data-y="177.9" transform="translate(504.2 177.9)" display="none">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="6.8" y="3.8" text-anchor="start" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Fayetteville</text>
+    </g>
+    <g class="city lvl3" data-x="630.9" data-y="118.6" transform="translate(630.9 118.6)" display="none">
+      <circle r="3.3" fill="#111111" stroke="#ffffff" stroke-width="1.6"/>
+      <text x="-6.8" y="3.8" text-anchor="end" font-size="11" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="2.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Greenville</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

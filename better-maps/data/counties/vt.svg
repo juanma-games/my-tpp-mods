@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 810"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -111,5 +111,75 @@
        style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#cccccc;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
        d="m 214.45898,106.77539 24.78321,13.0957 16.4375,9.01758 a 0.50005,0.50005 0 0 0 0.13086,0.0488 l 28.39843,6.41016 a 0.50005,0.50005 0 0 0 0.008,0.002 l 3.24804,0.67969 12.63672,17.83008 a 0.50005,0.50005 0 0 0 0.0117,0.0156 l 7.7793,10.14844 a 0.50005,0.50005 0 0 0 0.24023,0.17187 l 3.70313,1.22071 -4.97461,10.01171 a 0.50005,0.50005 0 0 0 0.21484,0.66407 l 6.30664,3.32617 -8.47461,15.88672 a 0.50005,0.50005 0 0 0 0.29297,0.71289 l 7.76758,2.42969 -8.52148,16.31054 a 0.50005,0.50005 0 0 0 0.19921,0.66797 l 8.89649,4.96289 -5.55078,9.59571 -1.29883,0.0703 -7.02734,-2.82813 a 0.50005,0.50005 0 0 0 -0.6543,0.28711 l -11.33008,30.01953 a 0.50005,0.50005 0 0 0 0.31641,0.6543 l 2.24609,0.71289 -13.67578,38.13281 -2.92188,-22.33398 -2.49023,-22.17578 a 0.50005,0.50005 0 0 0 -0.36133,-0.42578 l -11.12109,-3.09961 a 0.50005,0.50005 0 0 0 -0.62891,0.55468 l 0.85742,5.90039 -12.39843,1.67383 -0.0859,-0.84765 a 0.50005,0.50005 0 0 0 -0.58985,-0.44141 l -20.45703,3.81055 -11.17187,1.92578 -17.79688,2.01758 0.52149,-1.94336 a 0.50005,0.50005 0 0 0 -0.18164,-0.52735 l -3.49024,-2.64843 a 0.50005,0.50005 0 0 0 -0.64062,0.0293 l -3.30078,3.02735 -0.96094,-0.78907 5.24609,-5.59765 a 0.50005,0.50005 0 0 0 0.0449,-0.62891 l -2.13085,-3.05078 a 0.50005,0.50005 0 0 0 -0.57032,-0.1875 l -2.76757,0.93359 0.81054,-4.7832 3.2168,-7.16211 1.63086,-2.03125 a 0.50005,0.50005 0 0 0 0.0937,-0.43945 l -0.91406,-3.45703 2.45703,-1.4668 a 0.50005,0.50005 0 0 0 0.19336,-0.21289 l 1.93164,-4.03125 a 0.50005,0.50005 0 0 0 -0.0254,-0.47656 l -0.99024,-1.60742 0.51563,-2.85157 a 0.50005,0.50005 0 0 0 -0.12305,-0.42773 l -1.21484,-1.32813 -1.14844,-4.45703 3.20312,-3.1289 a 0.50005,0.50005 0 0 0 0.0547,-0.0625 l 2.2168,-3.04102 2.16601,0.27734 1.84375,3.83594 a 0.50005,0.50005 0 0 0 0.6211,0.25196 l 3.20117,-1.16993 a 0.50005,0.50005 0 0 0 0.31445,-0.35156 l 1.63867,-6.75977 a 0.50005,0.50005 0 0 0 0.0117,-0.16601 l -0.58984,-6.03125 a 0.50005,0.50005 0 0 0 -0.37891,-0.4375 l -2.39062,-0.58008 0.2168,-3.14453 2.48828,-2.21484 a 0.50005,0.50005 0 0 0 0.16601,-0.41407 l -0.49023,-5.9707 a 0.50005,0.50005 0 0 0 -0.0352,-0.14648 l -1.16016,-2.87891 a 0.50005,0.50005 0 0 0 -0.23046,-0.25586 l -3.81446,-2 -1.15039,-2.62891 a 0.50005,0.50005 0 0 0 -0.29883,-0.27343 l -6.36523,-2.14844 1.62305,-2.64649 a 0.50005,0.50005 0 0 0 0.0644,-0.35742 l -1.00977,-5.15039 a 0.50005,0.50005 0 0 0 -0.0527,-0.14258 l -1.58984,-2.91015 a 0.50005,0.50005 0 0 0 -0.16602,-0.17969 l -6.01367,-3.91406 1.28906,-1.15235 0.94531,1.31836 a 0.50005,0.50005 0 0 0 0.61914,0.16016 l 2.86329,-1.34766 1.05468,1.39649 a 0.50005,0.50005 0 0 0 0.42383,0.19726 l 3.38867,-0.1582 a 0.50005,0.50005 0 0 0 0.125,-0.0234 l 3.54102,-1.09961 a 0.50005,0.50005 0 0 0 0.17969,-0.10156 l 1.84961,-1.61914 a 0.50005,0.50005 0 0 0 0.16406,-0.4668 l -0.47266,-2.55078 1.64649,0.13086 -0.22657,4.42383 a 0.50005,0.50005 0 0 0 0.24414,0.45508 l 4,2.39062 a 0.50005,0.50005 0 0 0 0.36719,0.0586 l 2.16016,-0.49024 a 0.50005,0.50005 0 0 0 0.19726,-0.0937 l 3.58985,-2.81054 a 0.50005,0.50005 0 0 0 0.17383,-0.26172 l 2.19921,-8.0293 a 0.50005,0.50005 0 0 0 -0.33398,-0.61133 l -2.41016,-0.73828 a 0.50005,0.50005 0 0 0 -0.33203,0.0117 l -5.16601,2.05273 -2.21485,-0.77539 -0.88672,-8.42383 a 0.50005,0.50005 0 0 0 -0.15625,-0.31445 l -4.26367,-3.96875 2.25586,-1.12695 a 0.50005,0.50005 0 0 0 0.26172,-0.33008 l 0.64063,-2.64258 5.33398,-2.18164 a 0.50005,0.50005 0 0 0 0.25391,-0.23437 l 0.85937,-1.66016 a 0.50005,0.50005 0 0 0 0.0371,-0.36523 l -1.11328,-3.90625 0.89062,-8.17383 a 0.50005,0.50005 0 0 0 -0.008,-0.15039 l -0.5625,-2.84766 z"
        id="Chittenden" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="373.5" data-y="270.3" transform="translate(373.5 270.3)">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Montpelier</text>
+    </g>
+    <g class="city lvl1" data-x="231.5" data-y="216.4" transform="translate(231.5 216.4)">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Burlington</text>
+    </g>
+    <g class="city lvl2" data-x="251.6" data-y="508.8" transform="translate(251.6 508.8)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Rutland</text>
+    </g>
+    <g class="city lvl3" data-x="338.3" data-y="757.1" transform="translate(338.3 757.1)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Brattleboro</text>
+    </g>
+    <g class="city lvl3" data-x="485.9" data-y="198.8" transform="translate(485.9 198.8)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">St. Johnsbury</text>
+    </g>
+    <g class="city lvl3" data-x="252.6" data-y="739" transform="translate(252.6 739)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Bennington</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

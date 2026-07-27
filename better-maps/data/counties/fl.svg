@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 805"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -343,5 +343,95 @@
        d="m 752.36133,392.6875 6.69336,13.80859 2.10742,6.58789 2.30664,8.15235 a 0.50005,0.50005 0 0 0 0.0566,0.1289 l 1.37695,2.19922 0.94922,4.12891 -21.30468,0.10742 a 0.50005,0.50005 0 0 0 -0.004,0 l -16.52735,0.21875 -9.94531,0.0762 -0.17969,-9.66601 a 0.50005,0.50005 0 0 0 -0.50976,-0.49024 l -9.68945,0.19141 -0.16211,-10.50781 a 0.50005,0.50005 0 0 0 -0.52149,-0.49219 l -0.16015,0.008 -0.23633,-9.66211 0.85156,-0.006 a 0.50005,0.50005 0 0 0 0.008,0 l 10.55664,-0.24023 27.92383,-0.12109 a 0.50005,0.50005 0 0 0 0.45117,-0.28516 l 1.73633,-3.6582 3.5586,-0.0469 a 0.50005,0.50005 0 0 0 0.32812,-0.12891 z"
        id="Indian_River"
        inkscape:label="#Indian River" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="346.8" data-y="80.8" transform="translate(346.8 80.8)">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Tallahassee</text>
+    </g>
+    <g class="city lvl1" data-x="771.4" data-y="673" transform="translate(771.4 673)">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="-11.2" y="6.3" text-anchor="end" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Miami</text>
+    </g>
+    <g class="city lvl2" data-x="621.2" data-y="99.1" transform="translate(621.2 99.1)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="-11.2" y="6.3" text-anchor="end" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Jacksonville</text>
+    </g>
+    <g class="city lvl2" data-x="551.8" data-y="390.7" transform="translate(551.8 390.7)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="-11.2" y="6.3" text-anchor="end" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Tampa</text>
+    </g>
+    <g class="city lvl2" data-x="670" data-y="313" transform="translate(670 313)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="-11.2" y="6.3" text-anchor="end" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Orlando</text>
+    </g>
+    <g class="city lvl3" data-x="598.6" data-y="556.3" transform="translate(598.6 556.3)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Fort Myers</text>
+    </g>
+    <g class="city lvl3" data-x="42" data-y="74.3" transform="translate(42 74.3)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Pensacola</text>
+    </g>
+    <g class="city lvl3" data-x="554.3" data-y="178.7" transform="translate(554.3 178.7)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Gainesville</text>
+    </g>
+    <g class="city lvl3" data-x="780.7" data-y="542.4" transform="translate(780.7 542.4)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="-11.2" y="6.3" text-anchor="end" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">West Palm Beach</text>
+    </g>
+    <g class="city lvl3" data-x="695.2" data-y="258.1" transform="translate(695.2 258.1)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="-11.2" y="6.3" text-anchor="end" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Daytona Beach</text>
+    </g>
+    <g class="city lvl3" data-x="603.5" data-y="780.9" transform="translate(603.5 780.9)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="0" y="23.4" text-anchor="middle" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Key West</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

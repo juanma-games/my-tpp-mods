@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 810"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -127,5 +127,71 @@
        style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#cccccc;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
        d="m 434.70117,189.91797 0.0391,1.79297 a 0.50005,0.50005 0 0 0 0.50782,0.48828 l 31.36133,-0.54102 0.4707,23 0.0703,7.56641 a 0.50005,0.50005 0 0 0 0,0.0117 l 0.4707,14.72656 0.23829,14.56445 a 0.50005,0.50005 0 0 0 0.0469,0.20313 l 0.55664,1.19726 0.38672,14.68555 a 0.50005,0.50005 0 0 0 0.0352,0.16797 l 0.50781,1.30078 0.47656,16.13867 0.24219,16.14063 a 0.50005,0.50005 0 0 0 -0.39063,0.49219 l 0.13868,16.39062 a 0.50005,0.50005 0 0 0 0,0.004 l 0.27148,15.90039 a 0.50005,0.50005 0 0 0 0.31055,0.45508 l 2.35937,0.95898 a 0.50005,0.50005 0 0 0 0.3086,0.0234 l 14.1289,-3.47071 a 0.50005,0.50005 0 0 0 0.0117,-0.002 l 5.38086,-1.45117 a 0.50005,0.50005 0 0 0 0.3457,-0.63086 l -0.20312,-0.65234 11.09375,-2.97461 14.26172,-3.73438 3.74609,14.83203 8.66992,34.89453 -0.62695,0.15821 a 0.50005,0.50005 0 0 0 -0.36133,0.60937 l 3.67969,14.35938 -6.94336,1.53515 -4.2793,0.75977 a 0.50005,0.50005 0 0 0 -0.0391,0.008 l -2.64649,0.68555 -15.73632,3.13867 a 0.50005,0.50005 0 0 0 -0.002,0 l -15.41015,3.16016 a 0.50005,0.50005 0 0 0 -0.38867,0.5957 l 4.57226,21.00781 -15.37695,3.25586 a 0.50005,0.50005 0 0 0 -0.38672,0.58594 l 2.89453,14.73633 -15.27734,3.20898 a 0.50005,0.50005 0 0 0 -0.38672,0.58789 l 3.25976,16.24024 a 0.50005,0.50005 0 0 0 0,0.004 l 3.25,15.50782 1.27149,6.33789 -13.35938,2.73047 -7.81836,1.52929 a 0.50005,0.50005 0 0 0 -0.33984,0.24805 l -3.50781,6.28516 -5.1836,-2.86915 a 0.50005,0.50005 0 0 0 -0.61914,0.10743 l -2.82422,3.23242 -1.60156,1.34375 a 0.50005,0.50005 0 0 0 -0.15234,0.23047 l -1.92578,5.94531 -2.56055,-0.45313 0.48633,-1.46093 a 0.50005,0.50005 0 0 0 -0.38281,-0.64844 l -2.01954,-0.38086 -0.10546,-1.08594 a 0.50005,0.50005 0 0 0 -0.38086,-0.43945 l -1.5,-0.35938 a 0.50005,0.50005 0 0 0 -0.30664,0.0234 l -1.9043,0.78516 -0.22266,-0.32422 a 0.50005,0.50005 0 0 0 -0.26367,-0.19531 l -1.78906,-0.55664 -0.22461,-1.59571 a 0.50005,0.50005 0 0 0 -0.625,-0.41406 l -3.59961,0.9707 a 0.50005,0.50005 0 0 0 -0.36328,0.57227 l 0.006,0.0273 -2.92969,0.72071 0.008,0.0312 a 0.50005,0.50005 0 0 0 -0.60351,-0.35352 l -24.29688,6.10938 -11.53711,2.75781 -2.8125,-14.67578 a 0.50005,0.50005 0 0 0 -0.58203,-0.39844 l -7.30273,1.35742 -2.48047,-14.30469 0.15625,-0.0293 a 0.50005,0.50005 0 0 0 0.39648,-0.59375 l -7.52929,-35.95117 a 0.50005,0.50005 0 0 0 0,-0.002 l -2.26563,-10.57422 15.07422,-3.04101 a 0.50005,0.50005 0 0 0 0.004,0 l 13.45898,-2.79102 a 0.50005,0.50005 0 0 0 0.008,0 l 17.77539,-3.95898 15.95508,-3.26953 a 0.50005,0.50005 0 0 0 0.38867,-0.60157 l -3.18945,-14.08007 12.66016,-2.83985 a 0.50005,0.50005 0 0 0 0.38086,-0.59375 l -3.39063,-15.74804 -4.13867,-20.0879 a 0.50005,0.50005 0 0 0 -0.004,-0.0137 l -3.51953,-15.04883 a 0.50005,0.50005 0 0 0 -0.60547,-0.37304 l -2.13086,0.51953 -10.57422,2.19726 1.34961,-11.68359 a 0.50005,0.50005 0 0 0 0.004,-0.0586 l -0.0195,-10.07813 a 0.50005,0.50005 0 0 0 -0.0156,-0.125 l -0.96679,-3.73828 15.91797,-4.16211 a 0.50005,0.50005 0 0 0 0.37304,-0.48633 l -0.0293,-5.54101 a 0.50005,0.50005 0 0 0 0,-0.002 l -0.79883,-80.24609 0.0293,-8.52734 a 0.50005,0.50005 0 0 0 0,-0.008 l -0.38476,-31.71093 z"
        id="Penobscot" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="311.8" data-y="548.4" transform="translate(311.8 548.4)">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Augusta</text>
+    </g>
+    <g class="city lvl1" data-x="246.9" data-y="670.8" transform="translate(246.9 670.8)">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Portland</text>
+    </g>
+    <g class="city lvl2" data-x="450" data-y="428.5" transform="translate(450 428.5)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Bangor</text>
+    </g>
+    <g class="city lvl3" data-x="249.4" data-y="587.2" transform="translate(249.4 587.2)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Lewiston</text>
+    </g>
+    <g class="city lvl3" data-x="488" data-y="123.2" transform="translate(488 123.2)" display="none">
+      <circle r="5.4" fill="#111111" stroke="#ffffff" stroke-width="2.7"/>
+      <text x="11.2" y="6.3" text-anchor="start" font-size="18" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="4.3" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Presque Isle</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

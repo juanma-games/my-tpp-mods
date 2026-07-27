@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 535"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -228,5 +228,91 @@
        style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#cccccc;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
        d="m 763.90234,380.82617 1.20704,0.98438 -0.6211,2.19336 a 0.50005,0.50005 0 0 0 0.11524,0.47656 l 1.5996,1.72851 a 0.50005,0.50005 0 0 0 0.4629,0.15235 l 2.05859,-0.40039 a 0.50005,0.50005 0 0 0 0.125,-0.043 l 2.64453,-1.29688 3.42383,1.17188 a 0.50005,0.50005 0 0 0 0.0996,0.0234 l 3.20898,0.41015 a 0.50005,0.50005 0 0 0 0.35156,-0.0879 l 2.62305,-1.85742 1.46094,0.36914 0.39648,0.75391 -0.93359,5.55273 -1.4668,2.11914 a 0.50005,0.50005 0 0 0 -0.0879,0.3125 l 0.11133,1.90039 a 0.50005,0.50005 0 0 0 0.0957,0.26563 l 0.74024,1.01172 a 0.50005,0.50005 0 0 0 0.2832,0.18945 l 2.53711,0.62305 0.49805,0.41406 0.46094,2.95508 a 0.50005,0.50005 0 0 0 0.15039,0.28515 l 1.41992,1.33985 a 0.50005,0.50005 0 0 0 0.14843,0.0977 l 1.72071,0.72657 0.40234,0.66015 -0.50586,2.27344 a 0.50005,0.50005 0 0 0 0.14258,0.47266 l 2.19336,2.07617 1.25977,2.61328 0.37695,2.21875 -0.875,2.38672 a 0.50005,0.50005 0 0 0 -0.0117,0.30468 l 0.40039,1.44141 a 0.50005,0.50005 0 0 0 0.14648,0.23633 l 2.23829,2.01562 0.89062,1.5879 a 0.50005,0.50005 0 0 0 0.27344,0.22851 l 0.72851,0.25 0.13086,0.93945 -0.96679,0.85157 a 0.50005,0.50005 0 0 0 -0.16993,0.375 l -0.01,2.60547 -1.30274,1.76953 a 0.50005,0.50005 0 0 0 -0.0977,0.29297 l -0.01,1.73242 -0.6289,1.50976 -1.22461,0.23047 a 0.50005,0.50005 0 0 0 -0.29297,0.17188 l -0.81836,0.99023 a 0.50005,0.50005 0 0 0 -0.0996,0.44922 l 0.45117,1.66992 a 0.50005,0.50005 0 0 0 0.36133,0.35352 l 2.10352,0.52929 1.45117,1.84375 0.46679,2.25391 a 0.50005,0.50005 0 0 0 0.15039,0.26563 l 0.67774,0.62695 0.28516,2.21094 a 0.50005,0.50005 0 0 0 0.14257,0.28906 l 0.65625,0.65429 0.70118,2.62305 -6.62305,0.11914 a 0.50005,0.50005 0 0 0 -0.0117,0 l -36.50977,1.49024 a 0.50005,0.50005 0 0 0 -0.10351,0.0156 l -1.59766,0.41016 -3.75586,-0.16602 a 0.50005,0.50005 0 0 0 -0.0508,0 l -8.74219,0.49024 -0.76757,-17.48243 5.75976,-0.24804 a 0.50005,0.50005 0 0 0 0.47852,-0.52149 l -1.01953,-23.1914 a 0.50005,0.50005 0 0 0 -0.002,-0.008 l -0.53906,-9.08008 -0.13867,-6.14063 1.68164,-0.10937 a 0.50005,0.50005 0 0 0 0.4668,-0.52149 l -0.0762,-1.66406 3.88282,-0.12305 a 0.50005,0.50005 0 0 0 0.48437,-0.52734 l -0.0918,-1.66211 12.58985,-0.45117 a 0.50005,0.50005 0 0 0 0.48242,-0.51953 z"
        id="Asotin" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="202.9" data-y="315" transform="translate(202.9 315)">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="-8.7" y="4.9" text-anchor="end" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Olympia</text>
+    </g>
+    <g class="city lvl1" data-x="257.6" data-y="237.7" transform="translate(257.6 237.7)">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="8.7" y="4.9" text-anchor="start" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Seattle</text>
+    </g>
+    <g class="city lvl1" data-x="740.7" data-y="214.3" transform="translate(740.7 214.3)">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="-8.7" y="4.9" text-anchor="end" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Spokane</text>
+    </g>
+    <g class="city lvl3" data-x="227.3" data-y="286.4" transform="translate(227.3 286.4)" display="none">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="-8.7" y="4.9" text-anchor="end" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Tacoma</text>
+    </g>
+    <g class="city lvl2" data-x="221.8" data-y="509.5" transform="translate(221.8 509.5)" display="none">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="8.7" y="4.9" text-anchor="start" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Vancouver</text>
+    </g>
+    <g class="city lvl2" data-x="411.8" data-y="378.1" transform="translate(411.8 378.1)" display="none">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="8.7" y="4.9" text-anchor="start" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Yakima</text>
+    </g>
+    <g class="city lvl3" data-x="234.6" data-y="46" transform="translate(234.6 46)" display="none">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="8.7" y="4.9" text-anchor="start" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Bellingham</text>
+    </g>
+    <g class="city lvl3" data-x="270.8" data-y="165.5" transform="translate(270.8 165.5)" display="none">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="8.7" y="4.9" text-anchor="start" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Everett</text>
+    </g>
+    <g class="city lvl3" data-x="544.7" data-y="432.6" transform="translate(544.7 432.6)" display="none">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="8.7" y="4.9" text-anchor="start" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Kennewick</text>
+    </g>
+    <g class="city lvl3" data-x="454.9" data-y="226" transform="translate(454.9 226)" display="none">
+      <circle r="4.2" fill="#111111" stroke="#ffffff" stroke-width="2.1"/>
+      <text x="8.7" y="4.9" text-anchor="start" font-size="14" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.4" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Wenatchee</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

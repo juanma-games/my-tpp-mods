@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 595"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -88,5 +88,71 @@
        style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#cccccc;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
        d="m 299.81641,8.8535156 3.33789,0.1054688 a 0.50005,0.50005 0 0 0 0.01,0.00195 l 55.30664,0.6289063 6.69532,0.4589843 a 0.50005,0.50005 0 0 0 0.0254,0.002 l 13.15625,0.220703 -1.28711,20.697266 a 0.50005,0.50005 0 0 0 0.57031,0.525391 l 20.36133,-2.929688 a 0.50005,0.50005 0 0 0 0.42578,-0.445312 l 0.23242,-2.384766 1.0332,-0.982422 a 0.50005,0.50005 0 0 0 0.15625,-0.359375 l 0.01,-1.529297 1.3457,-2.169922 a 0.50005,0.50005 0 0 0 -0.0117,-0.544921 l -0.85547,-1.25 0.31641,-0.501954 0.875,0.339844 a 0.50005,0.50005 0 0 0 0.61524,-0.21875 l 1.38867,-2.429687 a 0.50005,0.50005 0 0 0 0.0371,-0.07813 L 404.5,13.388672 a 0.50005,0.50005 0 0 0 -0.0625,-0.457031 l -0.73047,-1.03125 a 0.50005,0.50005 0 0 0 -0.21875,-0.173829 l -1.1543,-0.466796 0.35547,-0.814454 24.03711,-0.324218 21.45899,2.375 a 0.50005,0.50005 0 0 0 0.0254,0.0039 l 13.91601,0.824219 0.35743,2.75 a 0.50005,0.50005 0 0 0 0.48828,0.435547 l 10.00976,0.15039 a 0.50005,0.50005 0 0 0 0.32031,-0.111328 l 3.58985,-2.890625 18.17773,-2.289062 7.24414,0.01953 1.51953,10.839844 a 0.50005,0.50005 0 0 0 0.002,0.0039 l 2.35742,15.988281 0.32812,3.447266 a 0.50005,0.50005 0 0 0 0.004,0.0293 l 2.50195,16.078125 -7.89648,1.089843 a 0.50005,0.50005 0 0 0 -0.42969,0.472657 l -0.30078,7.009765 a 0.50005,0.50005 0 0 0 0,0.01172 L 500,84.412109 l -0.66016,14.091797 -0.54882,9.126954 a 0.50005,0.50005 0 0 0 0.60156,0.51758 l 6.6914,-1.41016 a 0.50005,0.50005 0 0 0 0.043,-0.01 l 1.31055,-0.40235 -0.84961,4.84766 a 0.50005,0.50005 0 0 0 -0.002,0.0117 l -3.31055,22.15039 a 0.50005,0.50005 0 0 0 0.56445,0.56836 l 12.36133,-1.76758 1.50391,11.51758 a 0.50005,0.50005 0 0 0 0,0.002 l 3,22.23047 a 0.50005,0.50005 0 0 0 0.004,0.0332 l 0.50782,2.50781 4.56836,29.17969 a 0.50005,0.50005 0 0 0 0.004,0.0137 l 2.01953,10.99024 a 0.50005,0.50005 0 0 0 0.21875,0.32812 l 4.41993,2.86328 3.14062,2.26758 0.72266,1.29297 2.75,6.32617 a 0.50005,0.50005 0 0 0 0.008,0.0156 l 2.83594,5.9668 0.0351,1.01562 a 0.50005,0.50005 0 0 0 0.11719,0.30273 l 1.78516,2.13868 0.51758,2.84765 -0.62696,2.65821 a 0.50005,0.50005 0 0 0 -0.0117,0.11718 l 0.0293,6.22266 -0.33984,3.17773 -2.64454,6.23438 -19.65039,3.61328 -2.96289,-5.7832 -3.08398,-7.08594 a 0.50005,0.50005 0 0 0 -0.006,-0.0117 l -9.48242,-20.31445 -0.21875,-0.76367 a 0.50005,0.50005 0 0 0 -0.54297,-0.35743 l -6.71094,0.83985 a 0.50005,0.50005 0 0 0 -0.0332,0.006 l -4.20899,0.81836 -18.42773,2.76757 -21.07031,3.04883 0.88281,-3.03515 A 0.50005,0.50005 0 0 0 454.66797,225.5 l -7.88672,1.64648 -1.48633,0.16602 a 0.50005,0.50005 0 0 0 -0.0449,0.008 l -10.24609,2.07813 -15.56641,2.95117 a 0.50005,0.50005 0 0 0 -0.39258,0.36914 l -0.66992,2.66992 a 0.50005,0.50005 0 0 0 0.0605,0.38477 l 1.53515,2.4707 -0.25976,0.26953 a 0.50005,0.50005 0 0 0 -0.13672,0.2793 l -0.43164,3.17969 -0.9082,2.30468 a 0.50005,0.50005 0 0 0 0.0176,0.4043 l 0.27539,0.55664 -3.09765,0.57031 a 0.50005,0.50005 0 0 0 -0.0664,0.0176 l -2.56055,0.84961 a 0.50005,0.50005 0 0 0 -0.33007,0.36328 l -0.63477,2.79102 -4.24805,0.69726 a 0.50005,0.50005 0 0 0 -0.041,0.008 l -4.14063,1.03906 a 0.50005,0.50005 0 0 0 -0.37695,0.50586 l 0.29102,6.96484 -6.0586,0.79883 a 0.50005,0.50005 0 0 0 -0.0176,0.004 l -13.59961,2.29882 a 0.50005,0.50005 0 0 0 -0.37109,0.28321 l -1.61133,3.47851 -5.45117,6.40625 -2.17969,-0.66992 0.14649,-4.19726 a 0.50005,0.50005 0 0 0 -0.77149,-0.43555 l -0.63672,0.41211 0.63086,-3.56641 a 0.50005,0.50005 0 0 0 -0.59179,-0.57812 l -5.16993,1.04101 a 0.50005,0.50005 0 0 0 -0.0371,0.008 l -3.39844,0.96094 a 0.50005,0.50005 0 0 0 -0.35938,0.55078 l 1.62696,11.60157 -8.625,-2.08399 -0.63086,-2.73047 A 0.50005,0.50005 0 0 0 355.82422,272.25 l -0.69922,-0.13672 -0.74414,-2.07226 a 0.50005,0.50005 0 0 0 -0.1543,-0.2168 l -2.38867,-1.96094 a 0.50005,0.50005 0 0 0 -0.1543,-0.0859 l -1.66992,-0.58007 a 0.50005,0.50005 0 0 0 -0.23437,-0.0215 l -13.0293,1.83984 a 0.50005,0.50005 0 0 0 -0.006,0 l -11.87695,1.83008 0.54297,-2.60351 a 0.50005,0.50005 0 0 0 0.002,-0.0137 l 2.75,-15.125 1.82812,-9.37696 a 0.50005,0.50005 0 0 0 0.008,-0.14648 l -1.81055,-17.73047 -0.13867,-2.18164 a 0.50005,0.50005 0 0 0 -0.56836,-0.46289 l -8.89063,1.25976 a 0.50005,0.50005 0 0 0 -0.0176,0.002 l -4.45899,0.78711 -4.4707,0.43359 -2.4375,-15.90039 -1.63086,-11.20899 a 0.50005,0.50005 0 0 0 -0.002,-0.0176 l -0.92969,-5.16211 -2.98828,-20.10156 a 0.50005,0.50005 0 0 0 -0.002,-0.0117 l -3.6582,-21.19336 -1.73633,-12.00391 6.61133,-0.91211 a 0.50005,0.50005 0 0 0 0.0176,-0.004 l 6.28711,-1.10938 14.3457,-2.33984 a 0.50005,0.50005 0 0 0 0.40235,-0.35743 l 5.16015,-18.45117 a 0.50005,0.50005 0 0 0 -0.10547,-0.46289 l -1.05859,-1.21875 a 0.50005,0.50005 0 0 0 -0.27735,-0.16211 l -3.03124,-0.62109 a 0.50005,0.50005 0 0 0 -0.22657,0.008 l -1.49414,0.39258 -0.77929,-1.68945 0.01,-3.77149 2.98242,-10.906248 a 0.50005,0.50005 0 0 0 0.0176,-0.113281 l 0.0684,-1.701172 2.1875,-9.390625 9.95703,-0.828125 a 0.50005,0.50005 0 0 0 0.43945,-0.363281 l 3.58008,-12.761719 a 0.50005,0.50005 0 0 0 0.004,-0.01367 l 1.48242,-5.976563 0.21289,-0.25 a 0.50005,0.50005 0 0 0 0.10156,-0.189453 l 6.22852,-22.441406 a 0.50005,0.50005 0 0 0 -0.50391,-0.632813 l -28.81054,1.34961 a 0.50005,0.50005 0 0 0 -0.008,0.002 l -17.78125,1.138672 a 0.50005,0.50005 0 0 0 -0.008,0.002 l -10.80664,0.875 3.58594,-17.601562 z"
        id="Hartford" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="422.9" data-y="148.1" transform="translate(422.9 148.1)">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Hartford</text>
+    </g>
+    <g class="city lvl2" data-x="335.4" data-y="409.8" transform="translate(335.4 409.8)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">New Haven</text>
+    </g>
+    <g class="city lvl2" data-x="156.7" data-y="493" transform="translate(156.7 493)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="0" y="19.5" text-anchor="middle" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Bridgeport</text>
+    </g>
+    <g class="city lvl3" data-x="664.9" data-y="356.7" transform="translate(664.9 356.7)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="-9.3" y="5.2" text-anchor="end" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">New London</text>
+    </g>
+    <g class="city lvl3" data-x="224.5" data-y="165.3" transform="translate(224.5 165.3)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Torrington</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 433"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -163,5 +163,79 @@
        d="m 529.55273,87.5625 0.1875,28.42188 -1.02539,-1.23438 a 0.50005,0.50005 0 0 0 -0.0918,-0.0859 l -2.25,-1.61914 a 0.50005,0.50005 0 0 0 -0.32813,-0.0937 l -1.73633,0.11914 -1.33593,-0.78125 a 0.50005,0.50005 0 0 0 -0.22852,-0.0684 l -2.67969,-0.13086 a 0.50005,0.50005 0 0 0 -0.51367,0.60547 l 0.3711,1.72852 a 0.50005,0.50005 0 0 0 0.16406,0.27734 l 3.3125,2.81641 0.49414,1.10937 -0.36719,2.31446 a 0.50005,0.50005 0 0 0 0.12891,0.41992 l 1.64062,1.75 a 0.50005,0.50005 0 0 0 0.13086,0.0996 l 3.32617,1.76367 -2.20703,1.76367 -5.70898,-2.28516 -4.88867,-5.96093 a 0.50005,0.50005 0 0 0 -0.14454,-0.11914 l -1.23828,-0.68946 -16.3164,-9.11718 -0.10547,-20.839848 z"
        id="Baltimore_City"
        inkscape:label="#path25" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="527.6" data-y="183.1" transform="translate(527.6 183.1)">
+      <circle r="3.9" fill="#111111" stroke="#ffffff" stroke-width="1.9"/>
+      <text x="8.1" y="4.5" text-anchor="start" font-size="13" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.1" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Annapolis</text>
+    </g>
+    <g class="city lvl1" data-x="518.9" data-y="112.2" transform="translate(518.9 112.2)">
+      <circle r="3.9" fill="#111111" stroke="#ffffff" stroke-width="1.9"/>
+      <text x="8.1" y="4.5" text-anchor="start" font-size="13" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.1" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Baltimore</text>
+    </g>
+    <g class="city lvl2" data-x="381" data-y="69.4" transform="translate(381 69.4)" display="none">
+      <circle r="3.9" fill="#111111" stroke="#ffffff" stroke-width="1.9"/>
+      <text x="8.1" y="4.5" text-anchor="start" font-size="13" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.1" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Frederick</text>
+    </g>
+    <g class="city lvl3" data-x="413.5" data-y="145.7" transform="translate(413.5 145.7)" display="none">
+      <circle r="3.9" fill="#111111" stroke="#ffffff" stroke-width="1.9"/>
+      <text x="8.1" y="4.5" text-anchor="start" font-size="13" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.1" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Rockville</text>
+    </g>
+    <g class="city lvl3" data-x="296.3" data-y="49.4" transform="translate(296.3 49.4)" display="none">
+      <circle r="3.9" fill="#111111" stroke="#ffffff" stroke-width="1.9"/>
+      <text x="8.1" y="4.5" text-anchor="start" font-size="13" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.1" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Hagerstown</text>
+    </g>
+    <g class="city lvl3" data-x="149.7" data-y="40.6" transform="translate(149.7 40.6)" display="none">
+      <circle r="3.9" fill="#111111" stroke="#ffffff" stroke-width="1.9"/>
+      <text x="8.1" y="4.5" text-anchor="start" font-size="13" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.1" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Cumberland</text>
+    </g>
+    <g class="city lvl3" data-x="702.6" data-y="315.7" transform="translate(702.6 315.7)" display="none">
+      <circle r="3.9" fill="#111111" stroke="#ffffff" stroke-width="1.9"/>
+      <text x="-8.1" y="4.5" text-anchor="end" font-size="13" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.1" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Salisbury</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>

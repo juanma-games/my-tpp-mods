@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg
+<svg viewBox="0 0 810 621"
    xmlns:dc="http://purl.org/dc/elements/1.1/"
    xmlns:cc="http://creativecommons.org/ns#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -314,5 +314,95 @@
        style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#cccccc;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
        d="m 390.11133,355.80664 0.18945,2.44141 a 0.50005,0.50005 0 0 0 0.006,0.041 l 1.03711,6.47071 0.91797,11.4707 a 0.50005,0.50005 0 0 0 0.0293,0.13086 l 0.75976,2.08984 a 0.50005,0.50005 0 0 0 0.66016,0.29102 l 1.55273,-0.64453 9.16406,-0.13086 -0.0254,-0.25782 a 0.50005,0.50005 0 0 0 0.50977,0.45118 l 7.82227,-0.18946 0.13671,1.20118 0.0781,5.41601 a 0.50005,0.50005 0 0 0 0.5039,0.49219 l 10.41016,-0.0703 a 0.50005,0.50005 0 0 0 0.002,0 l 10.90039,-0.11329 -0.14648,16.2461 -0.0488,2.16601 a 0.50005,0.50005 0 0 0 0.002,0.0586 l 0.15039,1.60937 a 0.50005,0.50005 0 0 0 0.0937,0.25 l 1.14257,1.55274 0.79493,2.48242 a 0.50005,0.50005 0 0 0 0.23047,0.2832 l 1.00781,0.57031 -21.57031,0.33399 a 0.50005,0.50005 0 0 0 -0.002,0 l -13.19531,0.28125 -12.85352,-0.01 a 0.50005,0.50005 0 0 0 -0.004,0 l -10.95899,0.0586 a 0.50005,0.50005 0 0 0 -0.002,0 l -12.07422,0.0977 -0.0566,-3.48633 -0.19727,0.0703 a 0.50005,0.50005 0 0 0 0.33008,-0.50977 l -0.71875,-9.32031 v -1.4707 a 0.50005,0.50005 0 0 0 0,-0.0274 l -0.5039,-9.34375 2.45507,-0.15039 a 0.50005,0.50005 0 0 0 0.44727,-0.35156 l 0.28906,-0.93945 a 0.50005,0.50005 0 0 0 0.0215,-0.19141 l -0.15821,-1.78516 a 0.50005,0.50005 0 0 0 0.33008,-0.45898 l 0.0586,-2.62109 a 0.50005,0.50005 0 0 0 -0.13282,-0.35157 l -0.41797,-0.44922 -0.0684,-1.08203 a 0.50005,0.50005 0 0 0 -0.19141,-0.36328 l -0.72656,-0.5664 -0.0137,-0.33399 1.09766,-0.0547 a 0.50005,0.50005 0 0 0 0.46875,-0.57812 l -0.29101,-1.84961 a 0.50005,0.50005 0 0 0 -0.0391,-0.13281 l -0.42968,-0.92969 a 0.50005,0.50005 0 0 0 -0.47461,-0.28906 l -0.69336,0.0273 0.10156,-1.49414 a 0.50005,0.50005 0 0 0 -0.002,-0.0996 l -0.30079,-2.24023 a 0.50005,0.50005 0 0 0 -0.0351,-0.13086 L 367,368.25391 a 0.50005,0.50005 0 0 0 -0.47656,-0.30274 l -0.23828,0.008 -0.23828,-0.65625 -0.0293,-0.83984 0.22851,-0.004 a 0.50005,0.50005 0 0 0 0.48829,-0.5664 l -0.54883,-4 a 0.50005,0.50005 0 0 0 -0.4961,-0.43164 h -0.21875 l 0.14649,-1.26367 a 0.50005,0.50005 0 0 0 -0.004,-0.13282 l -0.43945,-2.86133 a 0.50005,0.50005 0 0 0 -0.0488,-0.15234 l -0.21094,-0.41016 9.50977,-0.3457 0.0137,0.0742 a 0.50005,0.50005 0 0 0 0.51562,0.41016 l 4.82032,-0.23047 a 0.50005,0.50005 0 0 0 0.008,0 l 5.28125,-0.33985 a 0.50005,0.50005 0 0 0 0.008,0 z"
        id="Broome" />
+<!--CITIES-LAYER-START-->
+  <g id="cities" pointer-events="none" transform="matrix(1,0,0,1,-5,-5)">
+    <g class="city lvl1" data-x="582.7" data-y="329.9" transform="translate(582.7 329.9)">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Albany</text>
+    </g>
+    <g class="city lvl1" data-x="590.9" data-y="574.6" transform="translate(590.9 574.6)">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="-9.3" y="5.2" text-anchor="end" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">New York</text>
+    </g>
+    <g class="city lvl2" data-x="105" data-y="293.4" transform="translate(105 293.4)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Buffalo</text>
+    </g>
+    <g class="city lvl2" data-x="215.8" data-y="260.5" transform="translate(215.8 260.5)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Rochester</text>
+    </g>
+    <g class="city lvl2" data-x="362.1" data-y="279.3" transform="translate(362.1 279.3)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Syracuse</text>
+    </g>
+    <g class="city lvl3" data-x="432.5" data-y="269.2" transform="translate(432.5 269.2)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Utica</text>
+    </g>
+    <g class="city lvl3" data-x="406.5" data-y="388.3" transform="translate(406.5 388.3)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Binghamton</text>
+    </g>
+    <g class="city lvl3" data-x="389.2" data-y="152.7" transform="translate(389.2 152.7)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Watertown</text>
+    </g>
+    <g class="city lvl3" data-x="600" data-y="46" transform="translate(600 46)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="-9.3" y="5.2" text-anchor="end" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Plattsburgh</text>
+    </g>
+    <g class="city lvl3" data-x="335.6" data-y="356.6" transform="translate(335.6 356.6)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="9.3" y="5.2" text-anchor="start" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Ithaca</text>
+    </g>
+    <g class="city lvl3" data-x="609.2" data-y="444.4" transform="translate(609.2 444.4)" display="none">
+      <circle r="4.5" fill="#111111" stroke="#ffffff" stroke-width="2.2"/>
+      <text x="-9.3" y="5.2" text-anchor="end" font-size="15" font-family="Arial,'Helvetica Neue',Helvetica,sans-serif" font-weight="bold" fill="#111111" stroke="#ffffff" stroke-width="3.6" paint-order="stroke" stroke-linejoin="round" stroke-linecap="round">Poughkeepsie</text>
+    </g>
   </g>
+<!--CITIES-LAYER-END-->
+</g>
+<!--CITIES-LAYER-START-->
+<style id="city-style">
+#cities{pointer-events:none}
+svg[data-city-zoom="2"] #cities .lvl2{display:inline}
+svg[data-city-zoom="3"] #cities .lvl2,svg[data-city-zoom="3"] #cities .lvl3{display:inline}
+</style>
+<script id="city-zoom">//<![CDATA[
+(function(){
+  var sc=document.getElementById('city-zoom');
+  var svg=(sc&&sc.ownerSVGElement)||document.documentElement;
+  if(!svg||!svg.querySelectorAll)return;
+  var cities=svg.querySelectorAll('#cities .city');
+  var lvl2=svg.querySelectorAll('#cities .lvl2'),lvl3=svg.querySelectorAll('#cities .lvl3');
+  var layer=svg.querySelector('#cities');
+  var base=null,last=-1;
+  function show(list,on){for(var i=0;i<list.length;i++)list[i].setAttribute('display',on?'inline':'none');}
+  function check(){
+    var ref=(layer&&layer.getScreenCTM)?layer:svg;
+    var ctm=ref.getScreenCTM&&ref.getScreenCTM();
+    if(!ctm)return;
+    var s=Math.sqrt(Math.abs(ctm.a*ctm.d-ctm.b*ctm.c))*(window.devicePixelRatio||1);
+    if(base===null&&s>0)base=s;
+    if(!base)return;
+    var z=s/base;
+    if(Math.abs(z-last)<=0.001)return;
+    last=z;
+    var lvl=z>=2.6?3:(z>=1.5?2:1);
+    svg.setAttribute('data-city-zoom',String(lvl));
+    show(lvl2,lvl>=2);show(lvl3,lvl>=3);
+    var k=Math.max(1/Math.max(z,1),0.12);
+    for(var i=0;i<cities.length;i++){
+      var c=cities[i];
+      c.setAttribute('transform','translate('+c.getAttribute('data-x')+' '+c.getAttribute('data-y')+') scale('+k+')');
+    }
+  }
+  check();
+  window.setInterval(check,250);
+  window.addEventListener('resize',check);
+  window.addEventListener('wheel',check,true);
+})();
+//]]></script>
+<!--CITIES-LAYER-END-->
 </svg>
