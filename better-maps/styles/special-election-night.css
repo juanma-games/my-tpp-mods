@@ -193,6 +193,36 @@ body.bm-special-election-active #bm-msnbc-election-btn {
     filter: brightness(1.08);
 }
 
+.bm-special-election-hex-map {
+    width: 88%;
+    height: 82%;
+}
+
+.bm-special-election-hex-district polygon {
+    stroke: #fff;
+    stroke-width: 2;
+    transition: fill .3s ease, filter .15s ease;
+}
+
+.bm-special-election-hex-district polygon:hover,
+.bm-special-election-hex-district polygon:focus {
+    filter: brightness(1.08);
+    outline: none;
+}
+
+.bm-special-election-hex-district text {
+    fill: #fff;
+    font-family: "Oswald", "Arial Narrow", Arial, sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: rgba(0, 0, 0, .35);
+    stroke-width: 2px;
+}
+
 .bm-special-election-map-back {
     position: absolute;
     z-index: 3;
