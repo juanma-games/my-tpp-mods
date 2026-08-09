@@ -488,13 +488,34 @@
         return `#${mixed.join("")}`;
     };
 
+    const MARGIN_STRENGTH_RAMP = Object.freeze([
+        [0, 0.28],
+        [0.5, 0.33],
+        [1, 0.37],
+        [3, 0.44],
+        [5, 0.50],
+        [10, 0.60],
+        [15, 0.68],
+        [20, 0.74],
+        [30, 0.82],
+        [45, 0.89],
+        [60, 0.94],
+        [75, 0.97],
+        [90, 0.99],
+        [100, 1]
+    ]);
     const marginStrength = margin => {
-        const absolute = Math.abs(Number(margin) || 0);
-        if(absolute < 1) return 0.22;
-        if(absolute < 3) return 0.35;
-        if(absolute < 7) return 0.5;
-        if(absolute < 15) return 0.7;
-        return 0.96;
+        const absolute = clamp(Math.abs(Number(margin) || 0), 0, 100);
+        for(let index = 1; index < MARGIN_STRENGTH_RAMP.length; index += 1) {
+            const [upperMargin, upperStrength] = MARGIN_STRENGTH_RAMP[index];
+            if(absolute > upperMargin) continue;
+            const [lowerMargin, lowerStrength] = MARGIN_STRENGTH_RAMP[index - 1];
+            const progress = upperMargin === lowerMargin
+                ? 1
+                : (absolute - lowerMargin) / (upperMargin - lowerMargin);
+            return lowerStrength + ((upperStrength - lowerStrength) * progress);
+        }
+        return MARGIN_STRENGTH_RAMP[MARGIN_STRENGTH_RAMP.length - 1][1];
     };
 
     const getRule = () => {
@@ -564,6 +585,7 @@
         let installed = false;
         let legislationHook = null;
         let electionUpdateHook = null;
+        let gameLoadListener = null;
         let electionTabObserver = null;
         let lifecycleTimer = null;
         let activeMeasureId = null;
@@ -3392,7 +3414,7 @@
                 });
             }
             lifecycleTimer = setInterval(lifecycleTick, 1000);
-            Executive.game.onGameLoad.registerListener(() => {
+            gameLoadListener = Executive.game.onGameLoad.registerListener(() => {
                 simulationCacheKey = "";
                 simulationCache = null;
                 resetElectionNightReportingRuntime("");
@@ -3418,6 +3440,8 @@
             if(electionUpdateHook !== null) {
                 Executive.functions.deregisterPostHook("electNightUpdateData", electionUpdateHook);
             }
+            gameLoadListener?.deregister?.();
+            gameLoadListener = null;
             installed = false;
         };
 

@@ -1,4 +1,8 @@
 {
+    const {
+        normalizeCountyJurisdictionKey,
+        countyKeysEquivalent
+    } = require("./precinct-results.js");
     const SVG_NS = "http://www.w3.org/2000/svg";
     const STYLE_ID = "bm-city-mayor-map-style";
     const LAYOUT_ID = "bm-city-mayor-layout";
@@ -20,7 +24,11 @@
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
+        .replace(/&(?:apos|#0*39|#x0*27);/gi, "'")
+        .replace(/&amp;/gi, "&")
+        .replace(/&quot;/gi, "\"")
         .replace(/_/g, " ")
+        .replace(/[\u2018\u2019']/g, "")
         .replace(/\bst[.]?\b/g, "saint")
         .replace(/&/g, " and ")
         .replace(
@@ -45,6 +53,25 @@
 
     const formatWholeNumber = value => Math.max(0, Math.round(readNumber(value)))
         .toLocaleString("en-US");
+
+    const splitCountyNames = value => {
+        const values = Array.isArray(value) ? value : [value];
+        return values.flatMap(entry => {
+            if(entry && typeof entry === "object") {
+                return splitCountyNames(
+                    entry.name
+                    ?? entry.countyName
+                    ?? entry.county
+                    ?? entry.id
+                    ?? ""
+                );
+            }
+            return String(entry ?? "")
+                .split(/\s*(?:,|;|\|)\s*/)
+                .map(name => name.trim())
+                .filter(Boolean);
+        });
+    };
 
     const getObjectLabel = value => {
         if(value === null || value === undefined) return "";
@@ -140,7 +167,10 @@
             try { entries = Object.entries(value); } catch { entries = []; }
             for(const [key, child] of entries) {
                 if(wanted.has(String(key).toLowerCase())) {
-                    const label = getObjectLabel(child).trim();
+                    const labels = splitCountyNames(child);
+                    const label = labels.length
+                        ? labels.join(", ")
+                        : getObjectLabel(child).trim();
                     if(label) return label;
                 }
             }
@@ -193,6 +223,7 @@
         const Executive = options.Executive;
         const precinctResultsController = options.precinctResultsController;
         const svgTextCache = new Map();
+        const countyIdentifierCache = new Map();
         let observer = null;
         let liveRefreshTimer = null;
         let refreshFrame = null;
@@ -221,6 +252,37 @@
         let lastTooltipPointer = null;
         let lastTooltipSignature = null;
         let lastRenderedTooltip = null;
+
+        const getCountyKey = (value, stateId) =>
+            normalizeCountyJurisdictionKey(value, stateId);
+
+        const getCountyIdentifiersForState = stateId => {
+            const normalizedState = String(stateId || "").trim().toLowerCase();
+            if(!normalizedState) return [];
+            if(countyIdentifierCache.has(normalizedState)) {
+                return countyIdentifierCache.get(normalizedState);
+            }
+            const file = path.join(
+                options.getBasePath(), "data", "counties", `${normalizedState}.svg`
+            );
+            let identifiers = [];
+            try {
+                const text = fs.readFileSync(file, "utf8");
+                identifiers = Array.from(text.matchAll(
+                    /<(?:path|polygon|polyline|rect)\b[^>]*\bid="([^"]+)"/gi
+                ))
+                    .map(match => match[1])
+                    .filter(identifier =>
+                        identifier
+                        && identifier !== "cities"
+                        && !/^(?:canvas_background|background|outline|path\d+)$/i
+                            .test(identifier)
+                    );
+            } catch {}
+            identifiers = Array.from(new Set(identifiers));
+            countyIdentifierCache.set(normalizedState, identifiers);
+            return identifiers;
+        };
 
         const injectStyles = () => {
             if(document.getElementById(STYLE_ID)) return;
@@ -522,7 +584,8 @@
                 );
                 if(ownName && ownName === targetCity) {
                     const county = findField([value], [
-                        "countyName", "countyId", "countyID", "homeCounty", "county"
+                        "countyName", "countyId", "countyID", "homeCounty",
+                        "county", "counties", "countyList", "jurisdictions"
                     ], 3);
                     if(county) return county;
                 }
@@ -538,72 +601,220 @@
             return "";
         };
 
+        const getVisibleMayorCityName = () => {
+            const headings = Array.from(document.querySelectorAll(
+                "h1, h2, h3, h4, p, div, span, .eNTitle, [class*='Title'], [class*='title']"
+            ));
+            for(const heading of headings) {
+                if(heading.children.length > 0) continue;
+                const text = String(heading.textContent || "").replace(/\s+/g, " ").trim();
+                const match = text.match(/^(.+?)\s+Mayoral Election$/i);
+                if(!match || /^City$/i.test(match[1])) continue;
+                return match[1].trim();
+            }
+            return "";
+        };
+
         const getCharacterArray = value => {
             if(Array.isArray(value)) return value;
-            try {
-                if(Array.isArray(value?.characterArray)) return value.characterArray;
-            } catch {}
-            try {
-                if(Array.isArray(value?.candidate)) return value.candidate;
-            } catch {}
-            try {
-                if(Array.isArray(value?.character)) return value.character;
-            } catch {}
+            const arrayKeys = [
+                "characterArray", "candidateArray", "candArray",
+                "candidate", "character", "raw", "source", "data", "values"
+            ];
+            for(const key of arrayKeys) {
+                try {
+                    if(Array.isArray(value?.[key])) return value[key];
+                } catch {}
+            }
             return null;
         };
 
+        const getCharacterLocationSources = value => {
+            const sources = [];
+            const queue = [{ value, depth: 0 }];
+            const seen = new Set();
+            const nestedKeys = [
+                "characterArray", "candidateArray", "candArray",
+                "candidate", "character", "characterData",
+                "raw", "source", "sourceCandidate", "originalCandidate",
+                "baseCandidate", "wrappedCandidate", "wrappedCharacter",
+                "data", "values", "array", "record",
+                "person", "politician", "player",
+                "residence", "location", "home", "address",
+                "attributes", "extendedAttribs",
+                "_character", "_data", "_source"
+            ];
+            while(queue.length) {
+                const current = queue.shift();
+                const source = current.value;
+                if(
+                    !source
+                    || (typeof source !== "object" && !Array.isArray(source))
+                    || seen.has(source)
+                ) {
+                    continue;
+                }
+                seen.add(source);
+                sources.push(source);
+                if(current.depth >= 4) continue;
+                nestedKeys.forEach(key => {
+                    let child;
+                    try { child = source?.[key]; } catch { child = null; }
+                    if(
+                        child
+                        && (typeof child === "object" || Array.isArray(child))
+                        && !seen.has(child)
+                    ) {
+                        queue.push({ value: child, depth: current.depth + 1 });
+                    }
+                });
+            }
+            return sources;
+        };
+
+        const getCharacterIdentityValues = value => {
+            const identities = new Set();
+            const candidateEnum = Executive?.enums?.characterArray?.candidate || {};
+            getCharacterLocationSources(value).forEach(source => {
+                const character = getCharacterArray(source) || source;
+                const values = [
+                    source?.id,
+                    source?.ID,
+                    source?.candidateId,
+                    source?.candidateID,
+                    source?.characterId,
+                    source?.characterID,
+                    source?.politicianId,
+                    source?.politicianID
+                ];
+                if(Array.isArray(character)) {
+                    values.push(
+                        character[candidateEnum.candidateId ?? 111],
+                        character[111]
+                    );
+                }
+                values.forEach(identity => {
+                    const normalized = String(identity ?? "").trim();
+                    if(normalized && normalized !== "0") identities.add(normalized);
+                });
+            });
+            return identities;
+        };
+
         const getCharacterLocation = value => {
-            const character = getCharacterArray(value) || value;
-            if(!character || typeof character !== "object") {
+            const sources = getCharacterLocationSources(value);
+            if(!sources.length) {
                 return { stateId: "", countyName: "" };
             }
             const candidateEnum = Executive?.enums?.characterArray?.candidate || {};
-            const readSlot = index => {
-                if(!Number.isInteger(index)) return undefined;
-                try { return character[index]; } catch { return undefined; }
-            };
-            const directSlots = [];
-            const slotCount = Math.max(
-                Number.isFinite(Number(character.length)) ? Number(character.length) : 0,
-                190
-            );
-            for(let index = 0; index < Math.min(slotCount, 260); index++) {
-                const slotValue = readSlot(index);
-                if(typeof slotValue === "string" && slotValue.trim()) {
-                    directSlots.push(slotValue.trim());
+            const directSlotEntries = [];
+            const stateCandidates = [];
+            const explicitCountyCandidates = [];
+            sources.forEach(source => {
+                const character = getCharacterArray(source) || source;
+                const readSlot = index => {
+                    if(!Number.isInteger(index)) return undefined;
+                    try { return character[index]; } catch { return undefined; }
+                };
+                const slotCount = Math.max(
+                    Number.isFinite(Number(character?.length))
+                        ? Number(character.length)
+                        : 0,
+                    190
+                );
+                for(let index = 0; index < Math.min(slotCount, 260); index++) {
+                    const slotValue = readSlot(index);
+                    if(typeof slotValue === "string" && slotValue.trim()) {
+                        directSlotEntries.push({ index, value: slotValue.trim() });
+                    }
                 }
-            }
-            const stateCandidates = [
-                readSlot(candidateEnum.stateId ?? 127),
-                value?.stateId,
-                value?.state,
-                value?.residence?.stateId,
-                value?.residence?.state,
-                ...directSlots
-            ];
+                stateCandidates.push(
+                    readSlot(candidateEnum.stateId ?? 127),
+                    readSlot(127),
+                    source?.stateId,
+                    source?.stateID,
+                    source?.stateCode,
+                    source?.homeState,
+                    source?.residenceState,
+                    source?.state,
+                    source?.residence?.stateId,
+                    source?.residence?.state
+                );
+                explicitCountyCandidates.push(
+                    readSlot(candidateEnum.countyName),
+                    readSlot(candidateEnum.countyId),
+                    readSlot(candidateEnum.county),
+                    readSlot(128),
+                    readSlot(123),
+                    source?.countyName,
+                    source?.countyId,
+                    source?.countyID,
+                    source?.homeCounty,
+                    source?.residenceCounty,
+                    source?.county,
+                    source?.residence?.countyName,
+                    source?.residence?.county
+                );
+            });
+            const directSlots = directSlotEntries.map(entry => entry.value);
+            stateCandidates.push(...directSlots);
             const stateId = stateCandidates
-                .map(candidate => String(candidate ?? "").trim().toUpperCase())
+                .map(candidate => {
+                    const raw = getObjectLabel(candidate).trim();
+                    const upper = raw.toUpperCase();
+                    if(STATE_IDS.has(upper)) return upper;
+                    const normalized = normalizeText(raw);
+                    const stateMatch = Object.entries(Executive?.data?.states || {})
+                        .find(([key, state]) =>
+                            normalizeText(key) === normalized
+                            || normalizeText(state?.id) === normalized
+                            || normalizeText(state?.stateId) === normalized
+                            || normalizeText(state?.name) === normalized
+                        );
+                    return String(stateMatch?.[0] || "").toUpperCase();
+                })
                 .find(candidate => STATE_IDS.has(candidate)) || "";
-            const explicitCountyCandidates = [
-                readSlot(candidateEnum.countyName),
-                readSlot(candidateEnum.countyId),
-                readSlot(candidateEnum.county),
-                readSlot(128),
-                readSlot(123),
-                value?.countyName,
-                value?.county,
-                value?.residence?.countyName,
-                value?.residence?.county
-            ];
             const isUsableCounty = candidate => candidate
                 && normalizeText(candidate) !== "none"
                 && !STATE_IDS.has(String(candidate).trim().toUpperCase());
+            const stateCountyIdentifiers = stateId
+                ? getCountyIdentifiersForState(stateId)
+                : [];
+            const getMappedCounty = candidate => {
+                const label = getObjectLabel(candidate).trim();
+                if(!isUsableCounty(label)) return "";
+                if(
+                    stateId === "DC"
+                    && getCountyKey(label, stateId) === "district of columbia"
+                ) {
+                    return "District of Columbia";
+                }
+                if(!stateCountyIdentifiers.length) return label;
+                return stateCountyIdentifiers.find(identifier =>
+                    countyKeysEquivalent(
+                        getCountyKey(label, stateId),
+                        getCountyKey(identifier, stateId)
+                    )
+                ) || "";
+            };
             const explicitCounty = explicitCountyCandidates
-                .map(candidate => typeof candidate === "string" ? candidate.trim() : "")
-                .find(isUsableCounty) || "";
-            const scannedCounty = directSlots
+                .map(getMappedCounty)
+                .find(Boolean) || "";
+            const mappedCounty = stateId
+                ? stateCountyIdentifiers.find(identifier =>
+                    directSlotEntries.some(entry =>
+                        entry.index >= 120
+                        && countyKeysEquivalent(
+                            getCountyKey(entry.value, stateId),
+                            getCountyKey(identifier, stateId)
+                        )
+                    )
+                ) || ""
+                : "";
+            const scannedCounty = mappedCounty || directSlots
                 .filter(candidate => COUNTY_LABEL_PATTERN.test(candidate))
-                .find(isUsableCounty) || "";
+                .map(getMappedCounty)
+                .find(Boolean) || "";
             const countyName = explicitCounty || scannedCounty;
 
             return { stateId, countyName, explicitCounty, scannedCounty };
@@ -686,7 +897,7 @@
             return "";
         };
 
-        const getSavedPlayerLocation = hintState => {
+        const getSavedPlayerLocation = (hintState, expectedNameTokens = []) => {
             const visibleText = normalizeText(globalThis.document?.body?.textContent || "");
             const paddedVisible = ` ${visibleText} `;
 
@@ -706,14 +917,21 @@
                 const cachedTokens = Array.isArray(cache.nameTokens) ? cache.nameTokens : [];
 
                 const nameOnScreen = cachedTokens.length > 0 && nameTokensPresent(cachedTokens);
-                const stateStillMatches = Boolean(cache.hintState) && Boolean(hintState)
-                    && normalizeText(cache.hintState) === normalizeText(hintState);
-                if(nameOnScreen || stateStillMatches) {
+                const nameMatchesPlayer = expectedNameTokens.length > 0
+                    && cachedTokens.join("|") === expectedNameTokens.join("|");
+                const stateStillMatches = !hintState
+                    || normalizeText(cache.stateId) === normalizeText(hintState);
+                const cacheIsFresh = Date.now() - readNumber(cache.checkedAt) < 4000;
+                if(stateStillMatches && cacheIsFresh && (nameOnScreen || nameMatchesPlayer)) {
                     return cache;
                 }
-                savedPlayerLocationCache = null;
+                if(!stateStillMatches || (!nameOnScreen && !nameMatchesPlayer)) {
+                    savedPlayerLocationCache = null;
+                }
             }
-            if(Date.now() - lastSaveFallbackAttempt < 4000) return null;
+            if(Date.now() - lastSaveFallbackAttempt < 4000) {
+                return savedPlayerLocationCache;
+            }
             lastSaveFallbackAttempt = Date.now();
             const saveDirectories = [];
             const addSaveDirectory = directory => {
@@ -791,13 +1009,20 @@
                     const location = getCharacterLocation(savedPlayer);
                     const nameTokens = getPlayerNameTokens(savedPlayer);
                     if(!location.stateId || !location.countyName || !nameTokens.length) continue;
-                    const record = { ...location, playerName: nameTokens.join(" "), nameTokens };
+                    const record = {
+                        ...location,
+                        playerName: nameTokens.join(" "),
+                        nameTokens,
+                        checkedAt: Date.now()
+                    };
                     validLocations.push(record);
                     if(!newestValidLocation) {
                         newestValidLocation = record;
                     }
 
-                    if(!nameTokensPresent(nameTokens)) continue;
+                    const matchesRuntimePlayer = expectedNameTokens.length > 0
+                        && nameTokens.join("|") === expectedNameTokens.join("|");
+                    if(!matchesRuntimePlayer && !nameTokensPresent(nameTokens)) continue;
                     savedPlayerLocationCache = record;
                     return savedPlayerLocationCache;
                 } catch {
@@ -812,7 +1037,11 @@
                 const inState = validLocations.find(location =>
                     normalizeText(location.stateId) === normalizeText(hintState));
                 if(inState) {
-                    savedPlayerLocationCache = { ...inState, hintState };
+                    savedPlayerLocationCache = {
+                        ...inState,
+                        hintState,
+                        checkedAt: Date.now()
+                    };
                     return savedPlayerLocationCache;
                 }
             }
@@ -843,14 +1072,26 @@
             addPlayerRoot(getRawExecutivePlayer());
 
             try { addPlayerRoot(options.getPlayerCharacter?.()); } catch {}
-            ["player", "playerCandidate", "candidatePlayer", "currentPlayer"].forEach(name => {
+            [
+                "player", "playerArray", "playerCharacter", "playerData",
+                "playerCandidate", "candidatePlayer", "currentPlayer"
+            ].forEach(name => {
                 try { addPlayerRoot(options.readRuntimeValue?.(name)); } catch {}
             });
             let wrappedPlayer = null;
             try { wrappedPlayer = Executive?.data?.characters?.player; } catch {}
             addPlayerRoot(wrappedPlayer);
+            try { addPlayerRoot(Executive?.data?.characters?.playerArray); } catch {}
+            try { addPlayerRoot(Executive?.data?.characters?.rawPlayer); } catch {}
+            try { addPlayerRoot(Executive?.data?.characters?.playerCharacter); } catch {}
             try { addPlayerRoot(Executive?.data?.player); } catch {}
             try { addPlayerRoot(Executive?.data?.candidatePlayer); } catch {}
+            const unresolvedPlayerRoots = playerRoots.slice();
+            unresolvedPlayerRoots.forEach(root => {
+                getCharacterIdentityValues(root).forEach(identity => {
+                    try { addPlayerRoot(options.getCandidateById?.(identity)); } catch {}
+                });
+            });
             const playerLocations = playerRoots
                 .map(getCharacterLocation)
                 .filter(location => location.stateId || location.countyName);
@@ -866,18 +1107,31 @@
             const raceCounty = raceLocations.find(location => location.explicitCounty)?.explicitCounty
                 || raceLocations.find(location => location.scannedCounty)?.scannedCounty
                 || findField(raceRoots, [
-                    "countyName", "countyId", "countyID", "homeCounty", "residenceCounty", "county"
+                    "countyName", "countyId", "countyID", "homeCounty", "residenceCounty",
+                    "county", "counties", "countyList", "jurisdictions"
+                ], 5);
+            const raceCountyCandidates = splitCountyNames(raceCounty);
+            const cityName = getVisibleMayorCityName()
+                || findField(raceRoots, [
+                    "cityName", "cityId", "cityID", "municipalityName", "municipality", "city"
                 ], 5);
             const hasCompletePlayerLocation = playerLocations.some(location =>
                 location.stateId && location.countyName
             );
+            const expectedPlayerNameTokens = playerRoots
+                .map(root => getCharacterArray(root) || root)
+                .map(character => [
+                    normalizeText(character?.firstName ?? character?.first ?? character?.[4]),
+                    normalizeText(character?.lastName ?? character?.last ?? character?.[5])
+                ].filter(token => token.length >= 2))
+                .find(tokens => tokens.length > 0) || [];
 
             const hintState = playerLocations.find(location => location.stateId)?.stateId
                 || raceState
                 || "";
             const savedLocation = hasCompletePlayerLocation
                 ? null
-                : getSavedPlayerLocation(hintState);
+                : getSavedPlayerLocation(hintState, expectedPlayerNameTokens);
             const rawPlayerState = playerLocations.find(location => location.stateId)?.stateId
                 || savedLocation?.stateId
                 || raceState
@@ -892,20 +1146,25 @@
 
             const playerExplicitCounty = playerLocations.find(location => location.explicitCounty)?.explicitCounty || "";
             const playerScannedCounty = playerLocations.find(location => location.scannedCounty)?.scannedCounty || "";
+            const cityCounty = findCountyFromCity(stateId || raceState, cityName);
             const countyCandidates = [];
             const addCounty = value => {
-                const trimmed = typeof value === "string" ? value.trim() : "";
-                if(trimmed && !countyCandidates.some(existing => normalizeText(existing) === normalizeText(trimmed))) {
-                    countyCandidates.push(trimmed);
-                }
+                splitCountyNames(value).forEach(trimmed => {
+                    if(!countyCandidates.some(existing =>
+                        normalizeText(existing) === normalizeText(trimmed)
+                    )) {
+                        countyCandidates.push(trimmed);
+                    }
+                });
             };
             addCounty(playerExplicitCounty);
-            addCounty(raceCounty);
             addCounty(savedLocation?.countyName);
             addCounty(playerScannedCounty);
             addCounty(findField(playerRoots, [
                 "countyName", "countyId", "countyID", "homeCounty", "residenceCounty", "county"
             ], 3));
+            addCounty(cityCounty);
+            addCounty(raceCountyCandidates);
 
             const playerState = String(playerLocations.find(location => location.stateId)?.stateId || "").trim().toUpperCase();
             const savedState = String(savedLocation?.stateId || "").trim().toUpperCase();
@@ -913,18 +1172,21 @@
             const locationCandidates = [];
             const addPair = (state, county) => {
                 const stateCode = String(state || "").trim().toUpperCase();
-                const county_ = typeof county === "string" ? county.trim() : "";
-                if(!STATE_IDS.has(stateCode) || !county_) return;
-                if(locationCandidates.some(pair =>
-                    pair.stateId === stateCode && normalizeText(pair.countyName) === normalizeText(county_)
-                )) return;
-                locationCandidates.push({ stateId: stateCode, countyName: county_ });
+                if(!STATE_IDS.has(stateCode)) return;
+                splitCountyNames(county).forEach(countyName => {
+                    if(locationCandidates.some(pair =>
+                        pair.stateId === stateCode
+                        && normalizeText(pair.countyName) === normalizeText(countyName)
+                    )) return;
+                    locationCandidates.push({ stateId: stateCode, countyName });
+                });
             };
 
-            addPair(raceStateUpper, raceCounty);
             addPair(playerState, playerExplicitCounty);
-            addPair(savedState, savedLocation?.countyName);
             addPair(playerState, playerScannedCounty);
+            addPair(savedState, savedLocation?.countyName);
+            addPair(stateId || raceStateUpper, cityCounty);
+            raceCountyCandidates.forEach(county => addPair(raceStateUpper, county));
 
             countyCandidates.forEach(county => addPair(stateId, county));
             const primaryPair = locationCandidates[0];
@@ -932,7 +1194,7 @@
             const countyName = primaryPair ? primaryPair.countyName : (countyCandidates[0] || "");
             return {
                 stateId: resolvedStateId,
-                cityName: "",
+                cityName,
                 countyName,
                 countyCandidates,
                 locationCandidates
@@ -955,32 +1217,35 @@
             return Array.from(svg.querySelectorAll("path, polygon, polyline, rect")).filter(isCounty);
         };
 
-        const findCountyElementExact = (elements, countyName) => {
-            const target = normalizeText(countyName);
+        const findCountyElementExact = (elements, countyName, stateId = "") => {
+            const target = getCountyKey(countyName, stateId);
             if(!target) return null;
-            return elements.find(element => normalizeText(element.id) === target) || null;
+            return elements.find(element => countyKeysEquivalent(
+                getCountyKey(element.id, stateId),
+                target
+            )) || null;
         };
 
-        const findCountyElement = (elements, countyName) => {
-            const exact = findCountyElementExact(elements, countyName);
+        const findCountyElement = (elements, countyName, stateId = "") => {
+            const exact = findCountyElementExact(elements, countyName, stateId);
             if(exact) return exact;
-            const target = normalizeText(countyName);
+            const target = getCountyKey(countyName, stateId);
             if(!target) return null;
             const close = elements.filter(element => {
-                const key = normalizeText(element.id);
+                const key = getCountyKey(element.id, stateId);
                 return key && (key.includes(target) || target.includes(key));
             });
             return close.length === 1 ? close[0] : null;
         };
 
-        const findCountyElementFromCandidates = (elements, countyNames) => {
+        const findCountyElementFromCandidates = (elements, countyNames, stateId = "") => {
             const names = (Array.isArray(countyNames) ? countyNames : [countyNames]).filter(Boolean);
             for(const name of names) {
-                const exact = findCountyElementExact(elements, name);
+                const exact = findCountyElementExact(elements, name, stateId);
                 if(exact) return exact;
             }
             for(const name of names) {
-                const fuzzy = findCountyElement(elements, name);
+                const fuzzy = findCountyElement(elements, name, stateId);
                 if(fuzzy) return fuzzy;
             }
             return null;
@@ -1042,15 +1307,33 @@
             svg.removeAttribute("height");
             const elements = getCountyElements(svg);
             mapPanel.appendChild(svg);
-            let countyPath = findCountyElementFromCandidates(elements, countyNames)
+            let countyPath = findCountyElementFromCandidates(elements, countyNames, stateId)
                 || findCountyElementFromCity(svg, elements, cityName);
+            if(
+                !countyPath
+                && String(stateId || "").toUpperCase() === "DC"
+                && countyNames.some(name =>
+                    getCountyKey(name, stateId) === "district of columbia"
+                )
+            ) {
+                const wardPaths = elements.filter(element =>
+                    /^ward[-_ ]?\d+$/i.test(String(element.id || ""))
+                );
+                if(wardPaths.length) {
+                    const group = parsed.createElementNS(SVG_NS, "g");
+                    group.id = "District_of_Columbia";
+                    wardPaths[0].parentElement?.appendChild(group);
+                    wardPaths.forEach(element => group.appendChild(element));
+                    countyPath = group;
+                }
+            }
             if(!countyPath) {
                 svg.remove();
                 return false;
             }
             const resolvedCountyName = countyPath.id.replace(/_/g, " ");
             elements.forEach(element => {
-                if(element !== countyPath) {
+                if(element !== countyPath && !countyPath.contains(element)) {
                     element.classList.add("bm-city-mayor-inactive-county");
                     element.removeAttribute("tabindex");
                     element.setAttribute("aria-hidden", "true");

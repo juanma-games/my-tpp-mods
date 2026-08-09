@@ -8,8 +8,12 @@
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
+        .replace(/&(?:apos|#0*39|#x0*27);/gi, "'")
+        .replace(/&amp;/gi, "&")
+        .replace(/&quot;/gi, "\"")
         .replace(/_/g, " ")
         .replace(/\b([a-z]+)[\u2019']s\b/g, "$1s")
+        .replace(/[\u2018\u2019']/g, "")
         .replace(/\bst[.]?\b/g, "saint")
         .replace(/&/g, " and ")
         .replace(
@@ -39,6 +43,20 @@
         const normalized = normalizeCountyName(rawName);
         const normalizedState = String(stateId || "").toUpperCase();
         const numericCode = String(jurisdictionCode || "").replace(/\D/g, "");
+        if(normalizedState === "AK") {
+            const alaskaAliases = {
+                "wade hampton": "kusilvak",
+                "kusilvak": "kusilvak",
+                "kenai": "kenai peninsula",
+                "kenai peninsula": "kenai peninsula",
+                "ketchikan": "ketchikan gateway",
+                "ketchikan gateway": "ketchikan gateway",
+                "valdez cordova": "valdez cordova",
+                "chugach": "valdez cordova",
+                "copper river": "valdez cordova"
+            };
+            if(alaskaAliases[normalized]) return alaskaAliases[normalized];
+        }
         if(normalizedState === "VA") {
             const normalizedWords = normalized.replace(/\s+/g, " ").trim();
             const hasCitySuffix = /\bcity\s*$/i.test(jurisdictionName);
@@ -108,14 +126,35 @@
     const getCandidateVotes = candidate =>
         Math.max(0, Math.round(readNumber(candidate?.votes ?? candidate?.currentVotes)));
 
-    const getCandidateIdentity = candidate => String(
-        candidate?.id
-        ?? candidate?.candID
-        ?? candidate?.candidateId
-        ?? candidate?.name
-        ?? candidate?.fullName
-        ?? "candidate"
-    ).trim().toLowerCase();
+    const getCandidateIdentity = (candidate, index = 0) => {
+        const identity = candidate?.id
+            ?? candidate?.ID
+            ?? candidate?.candID
+            ?? candidate?.candidateId
+            ?? candidate?.candidateID
+            ?? candidate?.characterId
+            ?? candidate?.characterID
+            ?? candidate?.politicianId
+            ?? candidate?.politicianID;
+        if(identity !== undefined && identity !== null && String(identity).trim()) {
+            return `id:${String(identity).trim().toLowerCase()}`;
+        }
+        const name = String(
+            candidate?.fullName
+            || [candidate?.firstName || candidate?.first, candidate?.lastName || candidate?.last]
+                .filter(Boolean)
+                .join(" ")
+            || candidate?.name
+            || "candidate"
+        ).trim().replace(/\s+/g, " ").toLowerCase();
+        const party = String(
+            candidate?.party
+            ?? candidate?.caucusParty
+            ?? candidate?.extendedAttribs?.party
+            ?? ""
+        ).trim().toUpperCase();
+        return `name:${name}|party:${party || "?"}|index:${index}`;
+    };
 
     const getRaceTotal = race => {
         const candidateTotal = (race?.cands || []).reduce(
@@ -204,6 +243,171 @@
         return allocated;
     };
 
+    const stableUnitValue = value => {
+        const text = String(value || "");
+        let hash = 2166136261;
+        for(let index = 0; index < text.length; index++) {
+            hash ^= text.charCodeAt(index);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0) / 4294967295;
+    };
+
+    const weightedMoments = (values, weights) => {
+        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+        if(totalWeight <= 0) return { mean: 0, deviation: 0 };
+        const mean = values.reduce(
+            (sum, value, index) => sum + (value * weights[index]),
+            0
+        ) / totalWeight;
+        const variance = values.reduce(
+            (sum, value, index) =>
+                sum + (Math.pow(value - mean, 2) * weights[index]),
+            0
+        ) / totalWeight;
+        return {
+            mean,
+            deviation: Math.sqrt(Math.max(0, variance))
+        };
+    };
+
+    const standardizeValues = (values, weights) => {
+        const moments = weightedMoments(values, weights);
+        if(moments.deviation < 0.000001) return values.map(() => 0);
+        return values.map(value => (value - moments.mean) / moments.deviation);
+    };
+
+    const getPrecinctBox = precinct => {
+        try {
+            const box = precinct.element?.getBBox?.();
+            if(
+                box
+                && Number.isFinite(box.x)
+                && Number.isFinite(box.y)
+                && Number.isFinite(box.width)
+                && Number.isFinite(box.height)
+                && box.width > 0
+                && box.height > 0
+            ) {
+                return {
+                    x: box.x,
+                    y: box.y,
+                    width: box.width,
+                    height: box.height,
+                    centerX: box.x + (box.width / 2),
+                    centerY: box.y + (box.height / 2)
+                };
+            }
+        } catch(error) {
+        }
+        return null;
+    };
+
+    const buildEffectivePrecinctBaselines = (precincts, countyKey = "") => {
+        const result = precincts.map(precinct => ({ ...precinct.baseline }));
+        const usableIndexes = precincts
+            .map((precinct, index) => ({ precinct, index }))
+            .filter(({ precinct }) =>
+                precinct.hasBaselineData
+                && (precinct.baseline.D + precinct.baseline.R) > 0);
+        if(usableIndexes.length < 4) return result;
+
+        const partisanWeights = usableIndexes.map(({ precinct }) =>
+            precinct.baseline.D + precinct.baseline.R);
+        const logits = usableIndexes.map(({ precinct }) =>
+            Math.log((precinct.baseline.D + 0.5) / (precinct.baseline.R + 0.5)));
+        const sourceMoments = weightedMoments(logits, partisanWeights);
+        const logitRange = Math.max(...logits) - Math.min(...logits);
+        const FLAT_LOGIT_DEVIATION = 0.22;
+        const FLAT_LOGIT_RANGE = 0.9;
+        if(
+            sourceMoments.deviation >= FLAT_LOGIT_DEVIATION
+            || logitRange >= FLAT_LOGIT_RANGE
+        ) {
+            return result;
+        }
+
+        const boxes = usableIndexes.map(({ precinct }) => getPrecinctBox(precinct));
+        const validBoxes = boxes.filter(Boolean);
+        const hasGeography = validBoxes.length >= Math.ceil(boxes.length * 0.75);
+        let densityScores = usableIndexes.map(() => 0);
+        let spatialScores = usableIndexes.map(() => 0);
+        if(hasGeography) {
+            const minX = Math.min(...validBoxes.map(box => box.centerX));
+            const maxX = Math.max(...validBoxes.map(box => box.centerX));
+            const minY = Math.min(...validBoxes.map(box => box.centerY));
+            const maxY = Math.max(...validBoxes.map(box => box.centerY));
+            const xSpan = Math.max(1, maxX - minX);
+            const ySpan = Math.max(1, maxY - minY);
+            const angle = stableUnitValue(`${countyKey}|angle`) * Math.PI * 2;
+            const phase = stableUnitValue(`${countyKey}|phase`) * Math.PI * 2;
+            densityScores = boxes.map((box, index) => {
+                if(!box) return 0;
+                const votes = partisanWeights[index];
+                return Math.log1p(votes / Math.max(0.000001, box.width * box.height));
+            });
+            spatialScores = boxes.map(box => {
+                if(!box) return 0;
+                const normalizedX = (box.centerX - minX) / xSpan;
+                const normalizedY = (box.centerY - minY) / ySpan;
+                const axis = (normalizedX * Math.cos(angle))
+                    + (normalizedY * Math.sin(angle));
+                return Math.sin((axis * Math.PI * 1.6) + phase);
+            });
+        }
+
+        const sourceScores = standardizeValues(logits, partisanWeights);
+        const densityStandardized = standardizeValues(densityScores, partisanWeights);
+        const spatialStandardized = standardizeValues(spatialScores, partisanWeights);
+        const fallbackScores = usableIndexes.map(({ precinct, index }) =>
+            (stableUnitValue(`${countyKey}|${precinct.id}|${precinct.name}|${index}`) * 2) - 1);
+        const fallbackStandardized = standardizeValues(fallbackScores, partisanWeights);
+        const texture = usableIndexes.map((entry, index) =>
+            (sourceScores[index] * 0.2)
+            + (densityStandardized[index] * (hasGeography ? 0.62 : 0))
+            + (spatialStandardized[index] * (hasGeography ? 0.28 : 0))
+            + (fallbackStandardized[index] * (hasGeography ? 0.1 : 0.8)));
+        const standardizedTexture = standardizeValues(texture, partisanWeights);
+        const TARGET_LOGIT_DEVIATION = 0.72;
+        const offsets = standardizedTexture.map(value =>
+            Math.max(-1.65, Math.min(1.65, value * TARGET_LOGIT_DEVIATION)));
+
+        const sourceDemocraticVotes = usableIndexes.reduce(
+            (sum, { precinct }) => sum + precinct.baseline.D,
+            0
+        );
+        const sourcePartisanVotes = partisanWeights.reduce((sum, votes) => sum + votes, 0);
+        const targetShare = sourceDemocraticVotes / sourcePartisanVotes;
+        let lowerIntercept = -8;
+        let upperIntercept = 8;
+        for(let iteration = 0; iteration < 50; iteration++) {
+            const intercept = (lowerIntercept + upperIntercept) / 2;
+            const democraticVotes = offsets.reduce((sum, offset, index) =>
+                sum + (
+                    partisanWeights[index]
+                    / (1 + Math.exp(-(intercept + offset)))
+                ), 0);
+            if((democraticVotes / sourcePartisanVotes) < targetShare) {
+                lowerIntercept = intercept;
+            } else {
+                upperIntercept = intercept;
+            }
+        }
+        const intercept = (lowerIntercept + upperIntercept) / 2;
+        usableIndexes.forEach(({ precinct, index: resultIndex }, usableIndex) => {
+            const partisanTotal = precinct.baseline.D + precinct.baseline.R;
+            const democraticShare = 1 / (1 + Math.exp(-(intercept + offsets[usableIndex])));
+            const democraticVotes = partisanTotal * democraticShare;
+            result[resultIndex] = {
+                D: democraticVotes,
+                R: partisanTotal - democraticVotes,
+                I: precinct.baseline.I,
+                total: precinct.baseline.total
+            };
+        });
+        return result;
+    };
+
     const createPrecinctResultsController = options => {
         const fs = options.fs;
         const path = options.path;
@@ -233,6 +437,8 @@
         let nativeViewModeBeforePrecincts = null;
         let detailRenderToken = 0;
         let activeRaceVariant = "normal";
+        let statePrecinctViewMode = "margin";
+        let statePrecinctPaintToken = 0;
         const PRECINCT_MIN_ZOOM = 1;
         const PRECINCT_MAX_ZOOM = 20;
         const PRECINCT_BUTTON_ZOOM_STEP = 1;
@@ -241,6 +447,11 @@
             activeRaceVariant === "rcv" && context?.rcvRace
                 ? context.rcvRace
                 : context?.race
+        );
+        const isActiveRaceReady = () => (
+            activeRaceVariant === "rcv"
+                ? context?.rcvRaceReady === true
+                : context?.normalRaceReady === true
         );
         const getReturnMapMode = () => {
             if(activeRaceVariant === "rcv") {
@@ -387,6 +598,27 @@
             return svg;
         };
 
+        const frameStatePrecinctOverview = svg => {
+            const sourceViewBox = svg.dataset.bmPrecinctSourceViewBox
+                || svg.getAttribute("viewBox")
+                || `0 0 ${parseFloat(svg.getAttribute("width")) || 1} ${parseFloat(svg.getAttribute("height")) || 1}`;
+            const values = sourceViewBox.trim().split(/[\s,]+/).map(Number);
+            if(values.length !== 4 || values.some(value => !Number.isFinite(value))) return;
+            const [x, y, width, height] = values;
+            if(width <= 0 || height <= 0) return;
+            svg.dataset.bmPrecinctSourceViewBox = sourceViewBox;
+            const horizontalPadding = width * 0.08;
+            const topPadding = height * 0.16;
+            svg.setAttribute(
+                "viewBox",
+                `${x - horizontalPadding} ${y - topPadding} ${width + (horizontalPadding * 2)} ${height + topPadding}`
+            );
+            svg.setAttribute(
+                "preserveAspectRatio",
+                context.svgMap.getAttribute("preserveAspectRatio") || "xMidYMid meet"
+            );
+        };
+
         const createSvg = stateId => {
             const svg = getSvgTemplate(stateId);
             if(!svg) return null;
@@ -403,6 +635,7 @@
             );
             svg.setAttribute("width", context.svgMap.getAttribute("width") || "100%");
             svg.setAttribute("height", context.svgMap.getAttribute("height") || "100%");
+            frameStatePrecinctOverview(svg);
             svg.setAttribute("aria-label", `${stateId} precinct margin map`);
             return svg;
         };
@@ -797,7 +1030,7 @@
                     getCandidateVotes(candidate)
                 ].join(":"))
                 .join("|");
-            return `v7|${context.stateId}|${context.electionType}|${countyKey}|${signature}`;
+            return `v8|${context.stateId}|${context.electionType}|${countyKey}|${signature}`;
         };
 
         const buildCountySimulation = (countyKey, countyName, elements, countyRace) => {
@@ -815,21 +1048,28 @@
             }
             if(!countyRace || !Array.isArray(countyRace.cands) || !elements.length) return null;
 
-            const candidates = countyRace.cands.map(candidate => ({
-                source: candidate,
-                name: getCandidateName(candidate, options.getCandidateName),
-                party: getPartyKey(candidate, options.getCandidateParty),
-                candidateColour: options.getCandidateColour?.(candidate, getActiveRace()) || "",
-                votes: getCandidateVotes(candidate),
-                identity: getCandidateIdentity(candidate),
-                ideology: Math.max(
-                    -2,
-                    Math.min(
-                        2,
-                        Number(options.getCandidateIdeology?.(candidate)) || 0
+            const candidates = countyRace.cands.map((candidate, candidateIndex) => {
+                const source = options.getCandidateSource?.(candidate, getActiveRace())
+                    || candidate;
+                return {
+                    source,
+                    name: getCandidateName(candidate, options.getCandidateName),
+                    party: getPartyKey(candidate, options.getCandidateParty),
+                    candidateColour: options.getCandidateColour?.(
+                        candidate,
+                        getActiveRace()
+                    ) || "",
+                    votes: getCandidateVotes(candidate),
+                    identity: getCandidateIdentity(source, candidateIndex),
+                    ideology: Math.max(
+                        -2,
+                        Math.min(
+                            2,
+                            Number(options.getCandidateIdeology?.(candidate)) || 0
+                        )
                     )
-                )
-            }));
+                };
+            });
             candidates.forEach(candidate => {
                 candidate.baselineParty = candidate.party === "D" || candidate.party === "R"
                     ? candidate.party
@@ -888,24 +1128,26 @@
                     candidates: []
                 };
             });
+            const effectiveBaselines = buildEffectivePrecinctBaselines(precincts, countyKey);
 
             candidates.forEach((candidate, candidateIndex) => {
                 const baselineParty = candidate.baselineParty;
                 const partyGroup = candidatesByBaselineParty.get(baselineParty) || [];
                 const partyGroupIndex = partyGroup.indexOf(candidate);
                 const partyBaselineTotal = precincts.reduce(
-                    (sum, precinct) => sum + precinct.baseline[baselineParty],
+                    (sum, precinct, index) =>
+                        sum + effectiveBaselines[index][baselineParty],
                     0
                 );
-                const weights = precincts.map(precinct => {
+                const weights = precincts.map((precinct, precinctIndex) => {
                     if(!precinct.hasBaselineData) return 0;
                     const baseWeight = partyBaselineTotal > 0
-                        ? precinct.baseline[baselineParty]
-                        : (precinct.baseline.total || 1);
+                        ? effectiveBaselines[precinctIndex][baselineParty]
+                        : (effectiveBaselines[precinctIndex].total || 1);
                     if(partyGroup.length < 2 || partyGroupIndex < 0) return baseWeight;
-                    const democraticVotes = precinct.baseline.D;
-                    const republicanVotes = precinct.baseline.R;
-                    const independentVotes = precinct.baseline.I;
+                    const democraticVotes = effectiveBaselines[precinctIndex].D;
+                    const republicanVotes = effectiveBaselines[precinctIndex].R;
+                    const independentVotes = effectiveBaselines[precinctIndex].I;
                     const partisanVotes = democraticVotes + republicanVotes;
                     const allBaselineVotes = partisanVotes + independentVotes;
                     const independentShare = allBaselineVotes > 0
@@ -946,8 +1188,8 @@
                         : 0;
                 });
                 const ranked = precinct.candidates.slice().sort((a, b) => b.votes - a.votes);
-                precinct.winner = ranked[0] || null;
-                precinct.runnerUp = ranked[1] || null;
+                precinct.winner = precinct.totalVotes > 0 ? (ranked[0] || null) : null;
+                precinct.runnerUp = precinct.totalVotes > 0 ? (ranked[1] || null) : null;
                 precinct.marginPoints = precinct.totalVotes > 0
                     ? ((precinct.winner?.votes || 0) - (precinct.runnerUp?.votes || 0))
                         / precinct.totalVotes * 100
@@ -968,8 +1210,8 @@
                 candidates,
                 precincts,
                 totalVotes: officialTotal,
-                winner: officialRanked[0] || null,
-                runnerUp: officialRanked[1] || null,
+                winner: officialTotal > 0 ? (officialRanked[0] || null) : null,
+                runnerUp: officialTotal > 0 ? (officialRanked[1] || null) : null,
                 marginPoints: officialMargin,
                 rating: null
             };
@@ -986,15 +1228,15 @@
 
         const getStateSimulationSignature = () => {
             const race = getActiveRace();
-            const statewide = (race?.cands || []).map(candidate => [
-                getCandidateIdentity(candidate),
+            const statewide = (race?.cands || []).map((candidate, candidateIndex) => [
+                getCandidateIdentity(candidate, candidateIndex),
                 getPartyKey(candidate, options.getCandidateParty),
                 getCandidateVotes(candidate)
             ].join(":")).join("|");
             const counties = (race?.counties || []).map(county => [
                 getRaceCountyKey(county),
-                (county?.cands || []).map(candidate => [
-                    getCandidateIdentity(candidate),
+                (county?.cands || []).map((candidate, candidateIndex) => [
+                    getCandidateIdentity(candidate, candidateIndex),
                     getCandidateVotes(candidate)
                 ].join(":")).join(",")
             ].join("=")).join("|");
@@ -1270,7 +1512,10 @@
             activeSvg = null;
             document.getElementById("bm-precinct-county-toolbar")?.remove();
             document.getElementById("bm-precinct-return-state")?.remove();
+            document.getElementById("bm-precinct-state-view-controls")?.remove();
+            document.getElementById("bm-precinct-county-view-controls")?.remove();
             document.getElementById("bm-precinct-zoom-controls")?.remove();
+            statePrecinctPaintToken++;
             if(!preserveStatus) document.getElementById("bm-precinct-status")?.remove();
             document.querySelectorAll(".bm-precinct-county-reference").forEach(element =>
                 element.remove());
@@ -1402,11 +1647,230 @@
             )
             || getProjectionButton();
 
+        const copyNeutralButtonAppearance = (button, sourceButton = null) => {
+            const referenceButton = sourceButton || getNeutralReturnStyleButton();
+            if(referenceButton) {
+                const nativeStyle = getComputedStyle(referenceButton);
+                [
+                    "font", "padding", "border", "border-radius", "background",
+                    "color", "box-shadow", "line-height", "letter-spacing",
+                    "font-weight"
+                ].forEach(property => {
+                    button.style.setProperty(
+                        property,
+                        nativeStyle.getPropertyValue(property),
+                        property === "font-weight" ? "important" : ""
+                    );
+                });
+            }
+            if(context?.nativeReturnButtonSize?.height) {
+                button.style.setProperty(
+                    "height",
+                    `${context.nativeReturnButtonSize.height}px`,
+                    "important"
+                );
+            }
+        };
+
+        const getStatePrecinctNoResultColour = precinct => {
+            if(precinct?.rating?.colour) return precinct.rating.colour;
+            return precinct?.hasBaselineData === false
+                ? NO_PRECINCT_DATA_COLOUR
+                : TOSSUP_COLOUR;
+        };
+
+        const getStatePrecinctWinnerColour = precinct => {
+            if(
+                !precinct
+                || Number(precinct.totalVotes) <= 0
+                || !precinct.winner
+            ) {
+                return getStatePrecinctNoResultColour(precinct);
+            }
+            return precinct.winner.candidateColour
+                || precinct.rating?.colour
+                || TOSSUP_COLOUR;
+        };
+
+        const getStatePrecinctMarginColour = precinct => {
+            if(!precinct || Number(precinct.totalVotes) <= 0) {
+                return getStatePrecinctNoResultColour(precinct);
+            }
+            return precinct.rating?.colour
+                || precinct.winner?.candidateColour
+                || TOSSUP_COLOUR;
+        };
+
+        const getStatePrecinctFillColour = precinct => {
+            if(statePrecinctViewMode === "winner") {
+                return getStatePrecinctWinnerColour(precinct);
+            }
+            return getStatePrecinctMarginColour(precinct);
+        };
+
+        const updateStateViewControlSelection = () => {
+            document.querySelectorAll(
+                "#bm-precinct-state-view-controls [data-precinct-view-mode], "
+                + "#bm-precinct-county-view-controls [data-precinct-view-mode]"
+            ).forEach(button => {
+                const selected = button.dataset.precinctViewMode
+                    === statePrecinctViewMode;
+                button.classList.toggle(
+                    "bm-precinct-state-view-mode-active",
+                    selected
+                );
+                button.setAttribute("aria-pressed", selected ? "true" : "false");
+            });
+        };
+
+        const repaintStatePrecinctView = (svg, onComplete = null) => {
+            if(
+                !svg?.isConnected
+                || svg !== activeSvg
+                || detailCountyKey !== null
+            ) {
+                return;
+            }
+            const paintToken = ++statePrecinctPaintToken;
+            const elements = getPrecinctElements(svg);
+            let index = 0;
+            const paintChunk = () => {
+                if(
+                    paintToken !== statePrecinctPaintToken
+                    || !active
+                    || activeSvg !== svg
+                    || !svg.isConnected
+                    || detailCountyKey !== null
+                ) {
+                    return;
+                }
+                const end = Math.min(elements.length, index + 1200);
+                for(; index < end; index++) {
+                    const element = elements[index];
+                    if(element.classList.contains("bm-precinct-unmatched")) continue;
+                    const colour = statePrecinctViewMode === "winner"
+                        ? element.dataset.bmPrecinctWinnerColour
+                        : element.dataset.bmPrecinctMarginColour;
+                    if(colour) element.style.fill = colour;
+                }
+                if(index < elements.length) {
+                    requestAnimationFrame(paintChunk);
+                    return;
+                }
+                onComplete?.();
+            };
+            paintChunk();
+        };
+
+        const repaintCountyPrecinctView = svg => {
+            if(
+                !svg?.isConnected
+                || svg !== activeSvg
+                || detailCountyKey === null
+            ) {
+                return;
+            }
+            svg.querySelectorAll(".bm-precinct-detail-path").forEach(element => {
+                const colour = statePrecinctViewMode === "winner"
+                    ? element.dataset.bmPrecinctWinnerColour
+                    : element.dataset.bmPrecinctMarginColour;
+                if(colour) element.style.fill = colour;
+            });
+        };
+
+        const createStateViewControls = svg => {
+            document.getElementById("bm-precinct-state-view-controls")?.remove();
+            const controls = document.createElement("div");
+            controls.id = "bm-precinct-state-view-controls";
+            controls.setAttribute("role", "group");
+            controls.setAttribute("aria-label", "Precinct map display");
+            const returnButton = document.getElementById("bm-precinct-return-state");
+            ["winner", "margin"].forEach(mode => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = mode === "winner" ? "Winner" : "Margin";
+                button.dataset.precinctViewMode = mode;
+                button.className = "eNightMarginB bm-precinct-state-view-button";
+                copyNeutralButtonAppearance(button, returnButton);
+                listen(button, "click", event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if(statePrecinctViewMode === mode) return;
+                    options.playClick?.();
+                    statePrecinctViewMode = mode;
+                    updateStateViewControlSelection();
+                    repaintStatePrecinctView(svg);
+                });
+                controls.appendChild(button);
+            });
+            context.host.appendChild(controls);
+            updateStateViewControlSelection();
+            schedulePrecinctOverlayPosition();
+            return controls;
+        };
+
+        const createCountyViewControls = svg => {
+            document.getElementById("bm-precinct-county-view-controls")?.remove();
+            const controls = document.createElement("div");
+            controls.id = "bm-precinct-county-view-controls";
+            controls.setAttribute("role", "group");
+            controls.setAttribute("aria-label", "County precinct map display");
+            const returnButton = document.getElementById("bm-precinct-return-state");
+            ["winner", "margin"].forEach(mode => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = mode === "winner" ? "Winner" : "Margin";
+                button.dataset.precinctViewMode = mode;
+                button.className = "eNightMarginB bm-precinct-county-view-button";
+                copyNeutralButtonAppearance(button, returnButton);
+                listen(button, "click", event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if(statePrecinctViewMode === mode) return;
+                    options.playClick?.();
+                    statePrecinctViewMode = mode;
+                    updateStateViewControlSelection();
+                    repaintCountyPrecinctView(svg);
+                });
+                controls.appendChild(button);
+            });
+            context.host.appendChild(controls);
+            updateStateViewControlSelection();
+            return controls;
+        };
+
         const positionButtonBesideProjections = () => {
             const button = document.getElementById("eNightPrecinctsB");
             const projectButton = getProjectionButton();
             if(!button || !projectButton || !context?.host?.isConnected) return;
             const gap = 7;
+            const rcvColumnGap = 10;
+            const getNaturalButtonWidth = candidateButton => {
+                if(!candidateButton) return 0;
+                const style = getComputedStyle(candidateButton);
+                let textWidth = 0;
+                const canvas = document.createElement("canvas");
+                const canvasContext = canvas.getContext("2d");
+                if(canvasContext) {
+                    canvasContext.font = style.font;
+                    textWidth = canvasContext.measureText(
+                        candidateButton.textContent?.trim() || ""
+                    ).width;
+                }
+                const horizontalChrome = [
+                    "padding-left", "padding-right",
+                    "border-left-width", "border-right-width"
+                ].reduce(
+                    (total, property) =>
+                        total + (parseFloat(style.getPropertyValue(property)) || 0),
+                    0
+                );
+                return Math.ceil(
+                    textWidth > 0
+                        ? textWidth + horizontalChrome + 4
+                        : candidateButton.scrollWidth
+                );
+            };
             const getAvailableButtonWidth = projectBounds => {
                 let width = context.live === false
                     ? Math.max(82, projectBounds.width - 44)
@@ -1450,11 +1914,51 @@
                 });
                 if(projectBounds.width > 0) {
                     const availableWidth = getAvailableButtonWidth(projectBounds);
-
-                    const buttonWidth = context.live === false && flipButton
+                    const rcvButton = countyControls.querySelector(
+                        "#bm-precincts-rcv-button"
+                    );
+                    const hasRcvControls = Boolean(
+                        rcvButton
+                        && countyControls.classList.contains(
+                            "bm-has-rcv-map-controls"
+                        )
+                    );
+                    const regularButtonWidth = context.live === false && flipButton
                         ? Math.max(122, Math.min(140, availableWidth))
                         : availableWidth;
+                    const buttonWidth = hasRcvControls
+                        ? Math.max(122, getNaturalButtonWidth(rcvButton))
+                        : regularButtonWidth;
                     button.style.setProperty("width", `${buttonWidth}px`, "important");
+                    if(hasRcvControls) {
+                        countyControls.style.setProperty(
+                            "--bm-rcv-main-button-width",
+                            `${buttonWidth}px`
+                        );
+                        countyControls.style.setProperty(
+                            "width",
+                            `${
+                                buttonWidth
+                                + projectBounds.width
+                                + rcvColumnGap
+                            }px`
+                        );
+                        countyControls.style.setProperty(
+                            "column-gap",
+                            `${rcvColumnGap}px`,
+                            "important"
+                        );
+                        rcvButton.style.setProperty(
+                            "width",
+                            `${buttonWidth}px`,
+                            "important"
+                        );
+                        rcvButton.style.setProperty(
+                            "min-width",
+                            `${buttonWidth}px`,
+                            "important"
+                        );
+                    }
                     if(context.live === false && flipButton) {
                         flipButton.style.setProperty(
                             "width",
@@ -1471,16 +1975,48 @@
                 }
                 if(projectBounds.height > 0) {
                     button.style.setProperty("height", `${projectBounds.height}px`, "important");
+                    countyControls.querySelector("#bm-precincts-rcv-button")
+                        ?.style.setProperty(
+                            "height",
+                            `${projectBounds.height}px`,
+                            "important"
+                        );
                 }
                 button.style.setProperty("position", "static", "important");
                 button.style.removeProperty("left");
                 button.style.removeProperty("top");
                 button.style.setProperty("margin", "0", "important");
-                if(context.live === false && !flipButton) {
+                if(
+                    context.live === false
+                    && !flipButton
+                    && !countyControls.classList.contains(
+                        "bm-has-rcv-map-controls"
+                    )
+                ) {
                     button.style.setProperty("margin-left", `${gap}px`, "important");
                 } else {
                     button.style.removeProperty("margin-left");
                 }
+                const positionCountyControls = () => {
+                    if(
+                        !countyControls.isConnected
+                        || !context?.host?.isConnected
+                        || !context?.svgMap?.isConnected
+                    ) return;
+                    const hostBounds = context.host.getBoundingClientRect();
+                    const mapBounds = context.svgMap.getBoundingClientRect();
+                    if(mapBounds.width <= 0 || mapBounds.height <= 0) return;
+                    const mapLeft = mapBounds.left - hostBounds.left;
+                    const mapTop = mapBounds.top - hostBounds.top;
+                    countyControls.style.top = `${mapTop + 8}px`;
+                    countyControls.style.left = `${Math.max(
+                        mapLeft + 8,
+                        mapLeft + mapBounds.width - countyControls.offsetWidth - 8
+                    )}px`;
+                };
+                positionCountyControls();
+                requestAnimationFrame(positionCountyControls);
+                setTimeout(positionCountyControls, 0);
                 return;
             }
             const hostBounds = context.host.getBoundingClientRect();
@@ -1610,10 +2146,55 @@
             const mapLeft = mapBounds.left - hostBounds.left;
             const mapTop = mapBounds.top - hostBounds.top;
             const toolbar = document.getElementById("bm-precinct-county-toolbar");
+            const stateViewControls = document.getElementById(
+                "bm-precinct-state-view-controls"
+            );
+            const countyViewControls = document.getElementById(
+                "bm-precinct-county-view-controls"
+            );
+            if(stateViewControls) {
+                const stateViewControlsWidth = stateViewControls.offsetWidth || 0;
+                stateViewControls.style.setProperty(
+                    "top",
+                    `${mapTop + 3}px`,
+                    "important"
+                );
+                stateViewControls.style.setProperty(
+                    "left",
+                    `${Math.max(
+                        mapLeft + 8,
+                        mapLeft + mapBounds.width - stateViewControlsWidth - 8
+                    )}px`,
+                    "important"
+                );
+                stateViewControls.style.setProperty("right", "auto", "important");
+            }
+            let countyViewControlsWidth = 0;
+            if(countyViewControls) {
+                countyViewControlsWidth = countyViewControls.offsetWidth || 0;
+                countyViewControls.style.setProperty(
+                    "top",
+                    `${mapTop + 8}px`,
+                    "important"
+                );
+                countyViewControls.style.setProperty(
+                    "left",
+                    `${Math.max(
+                        mapLeft + 8,
+                        mapLeft + mapBounds.width - countyViewControlsWidth - 8
+                    )}px`,
+                    "important"
+                );
+                countyViewControls.style.setProperty("right", "auto", "important");
+            }
             if(toolbar) {
                 toolbar.style.left = `${mapLeft + 8}px`;
                 toolbar.style.top = `${mapTop + 8}px`;
-                toolbar.style.maxWidth = `${Math.max(120, mapBounds.width - 16)}px`;
+                toolbar.style.maxWidth = `${Math.max(
+                    120,
+                    mapBounds.width - 16 - countyViewControlsWidth
+                        - (countyViewControlsWidth > 0 ? 8 : 0)
+                )}px`;
             }
             const returnButton = document.getElementById("bm-precinct-return-state");
             if(returnButton && !toolbar?.contains(returnButton)) {
@@ -1869,7 +2450,11 @@
                         const precinct = precinctById.get(element.id);
                         if(!precinct) return;
                         precinctByElement.set(element, precinct);
-                        element.style.fill = precinct.rating.colour;
+                        element.dataset.bmPrecinctWinnerColour =
+                            getStatePrecinctWinnerColour(precinct);
+                        element.dataset.bmPrecinctMarginColour =
+                            getStatePrecinctMarginColour(precinct);
+                        element.style.fill = getStatePrecinctFillColour(precinct);
                         element.classList.add("bm-precinct-path", "bm-precinct-detail-path");
                         element.removeAttribute("tabindex");
                         element.setAttribute("focusable", "false");
@@ -1925,19 +2510,7 @@
                     returnButton.textContent = "Return to State Map";
                     returnButton.className = "eNightMarginB";
 
-                    const nativeModeButton = getNeutralReturnStyleButton();
-                    if(nativeModeButton) {
-                        const nativeStyle = getComputedStyle(nativeModeButton);
-                        [
-                            "font", "padding", "border", "border-radius", "background",
-                            "color", "box-shadow", "line-height", "letter-spacing"
-                        ].forEach(property => {
-                            returnButton.style.setProperty(
-                                property,
-                                nativeStyle.getPropertyValue(property)
-                            );
-                        });
-                    }
+                    copyNeutralButtonAppearance(returnButton);
                     if(context.nativeReturnButtonSize) {
                         const returnButtonWidth = Math.max(
                             205,
@@ -1982,6 +2555,7 @@
                     toolbar.appendChild(returnButton);
                     toolbar.appendChild(countyTitle);
                     context.host.appendChild(toolbar);
+                    createCountyViewControls(svg);
                     installZoomControls();
                     listen(window, "resize", schedulePrecinctOverlayPosition);
                     schedulePrecinctOverlayPosition();
@@ -2045,19 +2619,7 @@
             returnButton.type = "button";
             returnButton.textContent = "Return to State Map";
             returnButton.className = "eNightMarginB";
-            const nativeModeButton = getNeutralReturnStyleButton();
-            if(nativeModeButton) {
-                const nativeStyle = getComputedStyle(nativeModeButton);
-                [
-                    "font", "padding", "border", "border-radius", "background",
-                    "color", "box-shadow", "line-height", "letter-spacing"
-                ].forEach(property => {
-                    returnButton.style.setProperty(
-                        property,
-                        nativeStyle.getPropertyValue(property)
-                    );
-                });
-            }
+            copyNeutralButtonAppearance(returnButton);
             if(context.nativeReturnButtonSize) {
                 const returnButtonWidth = Math.max(
                     205,
@@ -2115,6 +2677,7 @@
                             throw new Error("No precinct could be matched to an official county result.");
                         }
                         setMapStatus(null);
+                        createStateViewControls(svg);
                     };
                     finishRender();
                     if(paintedStateCache.get(svg) === getStateSimulationSignature()) {
@@ -2123,7 +2686,17 @@
                                 count + (precinctByElement.has(element) ? 1 : 0),
                             0
                         );
-                        finishRender(true);
+                        simulations.forEach(simulation => {
+                            simulation.precincts.forEach(precinct => {
+                                const element = precinct.element;
+                                if(!element) return;
+                                element.dataset.bmPrecinctWinnerColour =
+                                    getStatePrecinctWinnerColour(precinct);
+                                element.dataset.bmPrecinctMarginColour =
+                                    getStatePrecinctMarginColour(precinct);
+                            });
+                        });
+                        repaintStatePrecinctView(svg, () => finishRender(true));
                         return;
                     }
                     const paintNextChunk = () => {
@@ -2143,7 +2716,11 @@
                                     "county-hover",
                                     "precinct-hover"
                                 );
-                                element.style.fill = precinct.rating.colour;
+                                element.dataset.bmPrecinctWinnerColour =
+                                    getStatePrecinctWinnerColour(precinct);
+                                element.dataset.bmPrecinctMarginColour =
+                                    getStatePrecinctMarginColour(precinct);
+                                element.style.fill = getStatePrecinctFillColour(precinct);
                                 element.classList.add("bm-precinct-path");
                                 matchedCount++;
                             }
@@ -2181,7 +2758,7 @@
             activeRaceVariant = /-rcv$/.test(sourceMode)
                 ? "rcv"
                 : "normal";
-            if(!context || active || !isFullyReported(getActiveRace(), context.live)) return;
+            if(!context || active || !isActiveRaceReady()) return;
             options.deactivateTurnout?.();
             options.hideNativeTooltip?.();
             const selectedNativeView = context.nativeViewControls?.querySelector(
@@ -2192,6 +2769,7 @@
                 || (selectedNativeView?.dataset.primaryCountyView === "projections"
                     ? "winner"
                     : "margin");
+            statePrecinctViewMode = "margin";
             active = true;
             activationPending = true;
             options.onActiveChange?.(true);
@@ -2258,16 +2836,20 @@
 
         const activate = () => {
             activeRaceVariant = "normal";
-            if(!context || !isFullyReported(getActiveRace(), context.live)) return;
+            if(!context || !isActiveRaceReady()) return;
             options.deactivateTurnout?.();
             options.hideNativeTooltip?.();
+            const sourceMode = options.getActiveMapMode?.() || "";
             const selectedNativeView = context.nativeViewControls?.querySelector(
-                ".bm-primary-county-view-active[data-primary-county-view]"
+                ".bm-primary-county-view-active[data-map-mode], "
+                + ".bm-primary-county-view-active[data-primary-county-view]"
             );
-            nativeViewModeBeforePrecincts = selectedNativeView?.dataset.mapMode
+            nativeViewModeBeforePrecincts = sourceMode
+                || selectedNativeView?.dataset.mapMode
                 || (selectedNativeView?.dataset.primaryCountyView === "projections"
                     ? "winner"
                     : "margin");
+            statePrecinctViewMode = "margin";
             active = true;
             activationPending = true;
             options.onActiveChange?.(true);
@@ -2291,13 +2873,14 @@
         const activateRcv = () => {
             if(!context?.rcvRace || active) return;
             activeRaceVariant = "rcv";
-            if(!isFullyReported(getActiveRace(), context.live)) {
+            if(!isActiveRaceReady()) {
                 activeRaceVariant = "normal";
                 return;
             }
             options.deactivateTurnout?.();
             options.hideNativeTooltip?.();
             nativeViewModeBeforePrecincts = "winner-rcv";
+            statePrecinctViewMode = "margin";
             active = true;
             activationPending = true;
             options.onActiveChange?.(true);
@@ -2325,7 +2908,7 @@
 
         const ensureButton = () => {
             let button = document.getElementById("eNightPrecinctsB");
-            if(context?.suppressEntryButton) {
+            if(context?.suppressEntryButton || context?.normalRaceReady !== true) {
                 button?.remove();
                 return;
             }
@@ -2369,7 +2952,11 @@
 
         const ensureRcvButton = () => {
             let button = document.getElementById("bm-precincts-rcv-button");
-            if(!context?.rcvRace || context?.suppressEntryButton) {
+            if(
+                !context?.rcvRace
+                || context?.rcvRaceReady !== true
+                || context?.suppressEntryButton
+            ) {
                 button?.remove();
                 return;
             }
@@ -2396,6 +2983,9 @@
                         style.getPropertyValue(property)
                     ));
             }
+            positionButtonBesideProjections();
+            requestAnimationFrame(positionButtonBesideProjections);
+            setTimeout(positionButtonBesideProjections, 0);
             button.onclick = event => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -2406,11 +2996,19 @@
 
         const sync = nextContext => {
             const stateId = String(nextContext?.stateId || "").toUpperCase();
+            const rcvRaceReady = isFullyReported(
+                nextContext?.rcvRace,
+                nextContext?.live
+            );
+            const normalRaceReady = isFullyReported(
+                nextContext?.race,
+                nextContext?.live
+            ) || rcvRaceReady;
             const supported = nextContext?.onCountyMap === true
                 && SUPPORTED_ELECTIONS.has(nextContext?.electionType)
                 && nextContext?.isPrimary !== true
                 && stateId !== "US"
-                && isFullyReported(nextContext?.race, nextContext?.live)
+                && normalRaceReady
                 && Boolean(nextContext?.svgMap?.isConnected)
                 && Boolean(nextContext?.host);
             const fileAvailable = supported && fs.existsSync(getSvgPath(stateId));
@@ -2433,6 +3031,8 @@
             context = {
                 ...nextContext,
                 stateId,
+                normalRaceReady,
+                rcvRaceReady,
                 host: nextContext.host,
                 nativeReturnButton,
                 nativeReturnButtonSize: nativeReturnBounds?.width > 0
@@ -2528,6 +3128,7 @@
 
     module.exports = {
         createPrecinctResultsController,
+        buildEffectivePrecinctBaselines,
         normalizeCountyJurisdictionKey: getCountyJurisdictionKey,
         countyKeysEquivalent
     };

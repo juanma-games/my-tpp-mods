@@ -86,6 +86,56 @@ const getPartyKey = party => {
     return String(party || "I").slice(0, 1).toUpperCase() || "I";
 };
 
+const getKnownPartyKey = party => {
+    if(party === undefined || party === null || String(party).trim() === "") return "";
+    return getPartyKey(party);
+};
+
+const getPartyFromRecord = record => {
+    if(record === undefined || record === null) return "";
+    if(Array.isArray(record)) return getKnownPartyKey(record[0]);
+    if(typeof record !== "object") {
+        return typeof record === "string" && /[a-z]/i.test(record)
+            ? getKnownPartyKey(record)
+            : "";
+    }
+    return getKnownPartyKey(
+        record.party
+        || record.partyId
+        || record.partyID
+        || record.partyName
+        || record.affiliation
+        || record.caucusParty
+        || record.caucus
+        || record.extendedAttribs?.party
+        || record.extendedAttribs?.caucusParty
+    );
+};
+
+const getExplicitPreviousSeatParty = (...sources) => {
+    const partyKeys = [
+        "incumbentParty", "incumbParty", "previousParty", "priorParty",
+        "oldParty", "lastParty", "seatParty", "holderParty",
+        "defendingParty", "defenderParty", "retiringParty", "openSeatParty"
+    ];
+    const holderKeys = [
+        "previousWinner", "previousIncumbent", "incumbent",
+        "officeHolder", "currentHolder", "currentSenator", "senator"
+    ];
+    for(const source of sources) {
+        if(!source || typeof source !== "object") continue;
+        for(const key of partyKeys) {
+            const party = getPartyFromRecord(source[key]);
+            if(party) return party;
+        }
+        for(const key of holderKeys) {
+            const party = getPartyFromRecord(source[key]);
+            if(party) return party;
+        }
+    }
+    return "";
+};
+
 const getPartyColour = party => {
     const key = getPartyKey(party);
     if(key === "D") return "#168bd2";
@@ -447,7 +497,7 @@ const getSpecialCandidateLastName = candidate => {
     return fullName.split(/\s+/).pop();
 };
 
-const normalizeRace = (event, race) => {
+const normalizeRace = (event, race, previousParty = "") => {
     if(!event || !race) return null;
     const vars = event.vars || {};
     const state = String(vars.electState || race.state || "").toUpperCase();
@@ -496,6 +546,7 @@ const normalizeRace = (event, race) => {
             : isStateLegislativeRaceType(raceType)
                 ? `${STATE_NAMES[state] || state} - ${RACE_TYPES[raceType].officeLabel} District ${district}`
                 : `${STATE_NAMES[state] || state} - District ${district}`,
+        previousParty: getKnownPartyKey(previousParty),
         candidates
     };
 };
@@ -673,11 +724,10 @@ const getRaceStatus = race => {
 const isSpecialRaceFlip = race => {
     if(!race?.projected || !race?.leader) return false;
     const incumbent = (race.candidates || []).find(candidate => candidate?.incumbent) || null;
-    if(!race.leader.incumbent) return true;
-    return Boolean(
-        incumbent
-        && getPartyKey(incumbent.party) !== getPartyKey(race.leader.party)
-    );
+    const previousParty = getKnownPartyKey(race.previousParty)
+        || getPartyFromRecord(incumbent);
+    const winnerParty = getPartyFromRecord(race.leader);
+    return Boolean(previousParty && winnerParty && previousParty !== winnerParty);
 };
 
 const canEnterCountyResults = race => Boolean(race && Number(race.currentTotal) > 0);
@@ -743,6 +793,8 @@ const createSpecialElectionNight = options => {
         getHouseDistricts,
         getStateHouseElectStats,
         getStateSenateElectStats,
+        getRuntimeValue,
+        getCandidateById,
         playClick = () => {}
     } = options || {};
 
@@ -778,6 +830,146 @@ const createSpecialElectionNight = options => {
 
     const safePlayClick = () => {
         try { playClick(); } catch {}
+    };
+
+    const getArchiveNameForRaceType = raceType => {
+        if(raceType === "usHouse") return ["usHouseArchive"];
+        if(raceType === "usSenate") return ["usSenateArchive"];
+        if(raceType === "stateHouse") {
+            return ["stateHouseArchive", "allStateHouseArchive", "stateHouseElectionArchive"];
+        }
+        if(raceType === "stateSenate") {
+            return ["stateSenateArchive", "allStateSenateArchive", "stateSenateElectionArchive"];
+        }
+        return [];
+    };
+
+    const getArchivedElectionCandidates = election => {
+        if(Array.isArray(election?.cands)) return election.cands;
+        if(Array.isArray(election?.candidates)) return election.candidates;
+        return [];
+    };
+
+    const getArchiveElections = archiveEntry => {
+        const direct = getElectionArray(archiveEntry);
+        if(direct.length) return direct;
+        const elections = [];
+        Object.values(archiveEntry || {}).forEach(value => {
+            if(!Array.isArray(value)) return;
+            value.forEach(entry => {
+                if(getArchivedElectionCandidates(entry).length) elections.push(entry);
+                else getElectionArray(entry).forEach(election => elections.push(election));
+            });
+        });
+        return elections;
+    };
+
+    const getArchivedElectionDistrictNumber = election => {
+        const direct = Number(
+            election?.districtNumber
+            ?? election?.districtNum
+            ?? election?.seat
+        );
+        if(Number.isFinite(direct)) return direct;
+        const match = String(election?.district || election?.name || election?.title || "")
+            .match(/(?:district|seat)\s*(\d+)/i);
+        return match ? Number(match[1]) : null;
+    };
+
+    const archivedElectionMatches = (election, raceType, state, district) => {
+        const label = String(
+            election?.state
+            || election?.stateId
+            || election?.district
+            || election?.name
+            || election?.title
+            || ""
+        ).toLowerCase();
+        const stateCode = String(state || "").toUpperCase();
+        const stateName = String(STATE_NAMES[stateCode] || stateCode).toLowerCase();
+        const stateMatches = String(election?.state || election?.stateId || "").toUpperCase() === stateCode
+            || label === stateName
+            || label === stateCode.toLowerCase()
+            || label.includes(stateName);
+        if(!stateMatches) return false;
+        if(raceType === "usSenate") return true;
+        return getArchivedElectionDistrictNumber(election) === Number(district);
+    };
+
+    const getPreviousArchivedWinnerParty = (event, race) => {
+        if(typeof getRuntimeValue !== "function") return "";
+        const raceType = getSpecialEventRaceType(event);
+        const vars = event?.vars || {};
+        const specialYear = Number(vars.genYear ?? getCurrentYear?.());
+        const archives = getArchiveNameForRaceType(raceType)
+            .map(name => {
+                try { return getRuntimeValue(name); } catch { return null; }
+            })
+            .filter(Array.isArray);
+        for(const archive of archives) {
+            const entries = archive
+                .filter(entry => {
+                    const year = Number(entry?.year);
+                    const category = String(entry?.category || "").toLowerCase();
+                    return (!Number.isFinite(specialYear) || !Number.isFinite(year) || year < specialYear)
+                        && (!category || category === "general");
+                })
+                .sort((left, right) => {
+                    if(raceType === "usSenate" && Number.isFinite(specialYear)) {
+                        const targetYear = specialYear - 6;
+                        const leftDistance = Math.abs(Number(left?.year) - targetYear);
+                        const rightDistance = Math.abs(Number(right?.year) - targetYear);
+                        if(leftDistance !== rightDistance) return leftDistance - rightDistance;
+                    }
+                    return Number(right?.year || 0) - Number(left?.year || 0);
+                });
+            for(const entry of entries) {
+                const election = getArchiveElections(entry).find(candidateRace => archivedElectionMatches(
+                    candidateRace,
+                    raceType,
+                    String(vars.electState || race?.state || "").toUpperCase(),
+                    vars.electDistrict ?? race?.district
+                ));
+                const candidates = getArchivedElectionCandidates(election);
+                if(!candidates.length) continue;
+                const winner = candidates.slice().sort((left, right) =>
+                    (Number(right?.votes ?? right?.totVotes ?? right?.finalVotes) || 0)
+                    - (Number(left?.votes ?? left?.totVotes ?? left?.finalVotes) || 0)
+                )[0];
+                const archivedWinnerId = winner?.id
+                    ?? winner?.candID
+                    ?? winner?.candidateId
+                    ?? winner?.candidateID;
+                let party = getPartyFromRecord(winner);
+                if(!party && archivedWinnerId !== undefined && archivedWinnerId !== null) {
+                    try {
+                        party = getPartyFromRecord(getCandidateById?.(archivedWinnerId));
+                    } catch {}
+                }
+                if(party) return party;
+            }
+        }
+        return "";
+    };
+
+    const resolvePreviousSeatParty = (event, race) => {
+        const explicitParty = getExplicitPreviousSeatParty(event?.vars, event, race);
+        if(explicitParty) return explicitParty;
+
+        const incumbentCandidate = getRaceCandidates(race)
+            .find(candidate => candidate?.incumbent === true || candidate?.incumb === true);
+        const incumbentCandidateParty = getPartyFromRecord(incumbentCandidate);
+        if(incumbentCandidateParty) return incumbentCandidateParty;
+
+        const incumbentId = event?.vars?.incumbID;
+        if(incumbentId !== undefined && incumbentId !== null && String(incumbentId).trim()) {
+            try {
+                const incumbent = getCandidateById?.(incumbentId);
+                const incumbentParty = getPartyFromRecord(incumbent);
+                if(incumbentParty) return incumbentParty;
+            } catch {}
+        }
+        return getPreviousArchivedWinnerParty(event, race);
     };
 
     const getStore = () => {
@@ -950,15 +1142,19 @@ const createSpecialElectionNight = options => {
         const events = getScheduledSpecialEvents(activeEventList, year, week);
         if(!events.length) return null;
         recoverStateNewsResults(events);
-        const resolvedRaces = events.map(event => normalizeRace(
-            event,
-            getCapturedStateRace(event) || findSpecialRace(event, {
+        const resolvedRaces = events.map(event => {
+            const sourceRace = getCapturedStateRace(event) || findSpecialRace(event, {
                 usHouse: getHouseElectionNight?.(),
                 usSenate: getSenateElectionNight?.(),
                 stateSenate: null,
                 stateHouse: null
-            })
-        ));
+            });
+            return normalizeRace(
+                event,
+                sourceRace,
+                resolvePreviousSeatParty(event, sourceRace)
+            );
+        });
         const races = resolvedRaces.filter(Boolean);
 
         if(!haveAllSpecialRaceResults(events, races)) return null;
@@ -1084,6 +1280,74 @@ const createSpecialElectionNight = options => {
             return null;
         }
     };
+
+    const getHouseDistrictNumber = (district, index = 0) => {
+        const rawDistrict = district?.district
+            ?? district?.districtNumber
+            ?? district?.districtNum
+            ?? district?.districtId
+            ?? district?.districtID
+            ?? district?.houseDistrict
+            ?? district?.seat
+            ?? district?.officeDistrict;
+        const directNumber = Number(rawDistrict);
+        if(Number.isFinite(directNumber) && directNumber > 0) return directNumber;
+        const parsedNumber = Number(String(rawDistrict || "").match(/(\d{1,2})(?!.*\d)/)?.[1]);
+        return Number.isFinite(parsedNumber) && parsedNumber > 0 ? parsedNumber : index + 1;
+    };
+
+    const getCurrentHouseDistrictNumbers = state => {
+        const stateCode = String(state || "").toUpperCase();
+        const source = getHouseDistricts?.(stateCode);
+        let districts = [];
+        let stateIsImplicit = false;
+        if(Array.isArray(source)) {
+            districts = source;
+            stateIsImplicit = districts.length > 0 && districts.every(district => !(
+                district?.state
+                ?? district?.stateId
+                ?? district?.stateID
+                ?? district?.stateCode
+            ));
+        } else if(source && typeof source === "object") {
+            const stateBucket = source[stateCode]
+                ?? source[stateCode.toLowerCase()]
+                ?? source[STATE_NAMES[stateCode]];
+            if(Array.isArray(stateBucket)) {
+                districts = stateBucket;
+                stateIsImplicit = true;
+            } else {
+                districts = getElectionArray(stateBucket);
+                stateIsImplicit = districts.length > 0;
+            }
+        }
+        const matchingDistricts = districts.filter(district => {
+            if(stateIsImplicit) return true;
+            const districtState = String(
+                district?.state
+                ?? district?.stateId
+                ?? district?.stateID
+                ?? district?.stateCode
+                ?? ""
+            ).toUpperCase();
+            return districtState === stateCode;
+        });
+        return Array.from(new Set(matchingDistricts.map(getHouseDistrictNumber)))
+            .filter(number => Number.isFinite(number) && number > 0)
+            .sort((left, right) => left - right);
+    };
+
+    const getSvgHouseDistrictNumbers = svg => Array.from(new Set(
+        Array.from(svg?.querySelectorAll?.('[id^="district-"]') || [])
+            .map(element => Number(String(element.id || "").match(/^district-(\d+)$/i)?.[1]))
+            .filter(number => Number.isFinite(number) && number > 0)
+    )).sort((left, right) => left - right);
+
+    const houseDistrictSetsMatch = (currentDistricts, svgDistricts) => (
+        currentDistricts.length > 0
+        && currentDistricts.length === svgDistricts.length
+        && currentDistricts.every((district, index) => district === svgDistricts[index])
+    );
 
     const getVisibleRaces = () => raceModels.map(model => getVisibleRace(
         model,
@@ -1457,11 +1721,72 @@ const createSpecialElectionNight = options => {
         mapHost.appendChild(svg);
     };
 
+    const bindStateDistrictMapElement = (element, state, district) => {
+        const race = getRaceForStateDistrict(state, district);
+        paintPath(element, race ? getRaceMapColour(race) : "#b9bbbd");
+        bindMapPath(element, `${state}-${district}`, {
+            enter: race
+                ? event => showRaceTooltip(event, race.id)
+                : event => showHover(event, `${state} District ${district}: no special election`),
+            click: null
+        });
+    };
+
+    const renderHexStateMap = (state, districtNumbers) => {
+        const svgNamespace = "http://www.w3.org/2000/svg";
+        const columns = Math.min(8, Math.max(2, Math.ceil(Math.sqrt(districtNumbers.length * 1.5))));
+        const hexWidth = 72;
+        const hexHeight = 82;
+        const rowStep = hexHeight * 0.75;
+        const inset = 3;
+        const rows = Math.ceil(districtNumbers.length / columns);
+        const width = (columns * hexWidth) + (hexWidth / 2) + (inset * 2);
+        const height = hexHeight + ((rows - 1) * rowStep) + (inset * 2);
+        const svg = document.createElementNS(svgNamespace, "svg");
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        svg.setAttribute("role", "img");
+        svg.setAttribute("aria-label", `${STATE_NAMES[state] || state} House districts`);
+        svg.classList.add("bm-special-election-svg", "bm-special-election-hex-map");
+        districtNumbers.forEach((district, index) => {
+            const row = Math.floor(index / columns);
+            const column = index % columns;
+            const x = inset + (column * hexWidth) + ((row % 2) * (hexWidth / 2));
+            const y = inset + (row * rowStep);
+            const points = [
+                `${x + (hexWidth / 2)},${y}`,
+                `${x + hexWidth},${y + (hexHeight / 4)}`,
+                `${x + hexWidth},${y + ((hexHeight * 3) / 4)}`,
+                `${x + (hexWidth / 2)},${y + hexHeight}`,
+                `${x},${y + ((hexHeight * 3) / 4)}`,
+                `${x},${y + (hexHeight / 4)}`
+            ].join(" ");
+            const group = document.createElementNS(svgNamespace, "g");
+            const polygon = document.createElementNS(svgNamespace, "polygon");
+            const label = document.createElementNS(svgNamespace, "text");
+            group.classList.add("bm-special-election-hex-district");
+            group.setAttribute("role", "group");
+            polygon.setAttribute("points", points);
+            polygon.setAttribute("tabindex", "0");
+            polygon.setAttribute("role", "button");
+            polygon.setAttribute("aria-label", `${STATE_NAMES[state] || state} District ${district}`);
+            label.setAttribute("x", String(x + (hexWidth / 2)));
+            label.setAttribute("y", String(y + (hexHeight / 2)));
+            label.textContent = String(district);
+            group.append(polygon, label);
+            svg.appendChild(group);
+            bindStateDistrictMapElement(polygon, state, district);
+        });
+        mapHost.appendChild(svg);
+    };
+
     const renderStateMap = state => {
         mapHost.replaceChildren();
         mapPaths = new Map();
         const file = path.join("data", "states-house", `${state.toLowerCase()}-house.svg`);
         const svg = loadInlineSvg(file);
+        const currentDistricts = getCurrentHouseDistrictNumbers(state);
+        const svgDistricts = getSvgHouseDistrictNumbers(svg);
         const back = createElement("button", "bm-special-election-map-back", "Return to U.S. Map");
         back.addEventListener("click", () => {
             safePlayClick();
@@ -1470,6 +1795,10 @@ const createSpecialElectionNight = options => {
             renderPanel();
         });
         mapHost.appendChild(back);
+        if(currentDistricts.length > 0 && !houseDistrictSetsMatch(currentDistricts, svgDistricts)) {
+            renderHexStateMap(state, currentDistricts);
+            return;
+        }
         if(!svg) {
             mapHost.appendChild(createElement("div", "bm-special-election-map-error", "State district map unavailable"));
             return;
@@ -1477,15 +1806,7 @@ const createSpecialElectionNight = options => {
         svg.querySelectorAll('[id^="district-"]').forEach(element => {
             const district = Number(String(element.id).replace("district-", ""));
             if(!Number.isFinite(district)) return;
-            const race = getRaceForStateDistrict(state, district);
-            paintPath(element, race ? getRaceMapColour(race) : "#b9bbbd");
-            bindMapPath(element, `${state}-${district}`, {
-                enter: race
-                    ? event => showRaceTooltip(event, race.id)
-                    : event => showHover(event, `${state} District ${district}: no special election`),
-
-                click: null
-            });
+            bindStateDistrictMapElement(element, state, district);
         });
         mapHost.appendChild(svg);
     };

@@ -9,6 +9,7 @@
     const { buildRcvFinalResultsForUnits } = require("./rcv-map-results.js");
     const { createBallotMeasuresSubmod } = require("./ballot-measures.js");
     const { createSpecialElectionNight } = require("./special-election-night.js");
+    const { createVotingBooth } = require("./voting-booth.js");
     const {
         getCandidateColour,
         getCandidateColourForRace,
@@ -20,7 +21,7 @@
         configurePrimaryCountyResults,
         buildPrimaryCountyResults,
         getPrimaryCountyResult,
-        getPrimaryCountyTurnoutVotes,
+        getPrimaryCountyTurnout,
         getAvailablePrimaryParties,
         isPrimaryStateFullyReported,
         isPrimaryPartyFullyReported,
@@ -31,7 +32,7 @@
     const originalElectPageMap = Executive.functions.getOriginalFunction("electPageMap");
     const originalElectNightMap = Executive.functions.getOriginalFunction("electNightMap");
     const originalSummaryNationMap = Executive.functions.getOriginalFunction("summaryNationMap");
-    const { tooltipDiv, tooltipComponents, updateTooltip, updateHouseStateTooltip, updateHouseDistrictTooltip, getHouseDistrictFlipData, shouldRevealHouseDistrictResults, getLiveHouseDistrictSnapshot, hasVisibleHouseStateResults, refreshLiveStateResultsForTooltip, createTooltip, getSenateControlCountsFromPage, getLatestSenateControlCountsFromPage, getCurrentSenateParty, updateSenateControlBanner, updateHouseControlBanner, updatePresidentialWinnerBanner, getCandidateBannerPortraitSource, getActivePresidentialPrimaryParty, renderPrecinctResultsTooltip, hidePrecinctResultsTooltip, setPrimaryCountyResultResolver } = require("./tooltip.js");
+    const { tooltipDiv, tooltipComponents, updateTooltip, updateHouseStateTooltip, updateHouseDistrictTooltip, getHouseDistrictFlipData, shouldRevealHouseDistrictResults, getLiveHouseDistrictSnapshot, hasVisibleHouseStateResults, refreshLiveStateResultsForTooltip, createTooltip, getSenateControlCountsFromPage, getLatestSenateControlCountsFromPage, getCurrentSenateParty, updateSenateControlBanner, updateHouseControlBanner, updatePresidentialWinnerBanner, getCandidateBannerPortraitSource, getActivePresidentialPrimaryParty, getPrimaryCandidateAffiliation, renderPrecinctResultsTooltip, hidePrecinctResultsTooltip, setPrimaryCountyResultResolver } = require("./tooltip.js");
     let config = null;
     let onCountyMap = false;
     let lastMapElectionType = "none";
@@ -64,6 +65,7 @@
     const MAP_ELECTION_PENDING_FILL = "#eeeeee";
     const MAP_ELECTION_STATE_STROKE = "rgba(255, 255, 255, 0.9)";
     let activeCountyMapMode = MAP_MODES.MARGIN;
+    let presidentialPrimaryNationalMapMode = MAP_MODES.WINNER;
     const rcvMapResultsCache = new Map();
     const rcvMapContextByRace = new WeakMap();
     let lastMapPageRefresh = null;
@@ -76,6 +78,7 @@
     const statewideTurnoutAvailableElections = new Set();
     const statewideTurnoutMapControllers = new WeakMap();
     const statewideShiftArrowPoints = new WeakMap();
+    const statewideShiftDetailsByState = new Map();
     const electionNightMapButtonObservers = new Map();
     const statewideTurnoutDocumentListenerRemovers = [];
     let statewideTurnoutDocumentControllerInstalled = false;
@@ -89,14 +92,26 @@
     let electionNightThemePlayPending = false;
     let electionNightThemeMonitor = null;
     let electionNightThemeLastScreenSeenAt = 0;
+    let electionNightThemeSessionActive = false;
+    let electionNightThemeEnabled = true;
     let electionNightSkipEndPrimaryRefreshInstalled = false;
     let precinctResultsController = null;
     let cityMayoralMap = null;
     let ballotMeasuresSubmod = null;
     let independentPollObserver = null;
     let independentPollFormatQueued = false;
+    let independentPollFormatTimer = null;
+    let pollBattlegroundFilterActive = false;
+    let pollBattlegroundFilterInstalled = false;
+    let pollBattlegroundFilterRefreshTimer = null;
+    let pollBattlegroundResultsRestoreTimer = null;
+    let pollBattlegroundResultsRestoreState = null;
+    let pollBattlegroundStateCodesCache = null;
+    let independentPollFilterSelectsCache = null;
     let pollAverageTooltip = null;
+    let pollAverageWeekMarker = null;
     let independentPollResultsCache = null;
+    let pollWeeklyAveragesCache = null;
     let lastIndependentPollScan = 0;
     let pollAveragePointCenterCache = new WeakMap();
     let pollAverageRawPointCenterCache = new WeakMap();
@@ -104,10 +119,14 @@
     let pollAverageCanvasRecorderInstalled = false;
     const pollAverageTooltipTargets = new WeakSet();
     const pollAverageVisualOverlays = new WeakMap();
+    let pollAverageWeightedGraphCache = new WeakMap();
+    let pollAverageNativeColourCache = new WeakMap();
     let pollAverageActiveIndex = null;
     let pollAverageActiveX = null;
     let pollAverageActiveGraph = null;
     let specialElectionNight = null;
+    let votingBooth = null;
+    let votingBoothShapeDumped = false;
     let stateCountyZoomController = null;
     const marginThroughNightHistories = new Map();
     let marginThroughNightTooltip = null;
@@ -356,7 +375,7 @@
         } catch {}
         return normalized;
     };
-    const getStatewideSignedPartyMargin = (race, live = false) => {
+    const getStatewidePartyShares = (race, live = false) => {
         const candidates = race?.candidates || race?.cands || [];
         if(!Array.isArray(candidates) || candidates.length === 0) return null;
         let democraticVotes = 0;
@@ -376,12 +395,43 @@
             ) || 0);
             const party = getStatewideShiftCandidateParty(candidate);
             totalVotes += votes;
-            if(party === "D" || party === "ID") democraticVotes += votes;
-            else if(party === "R" || party === "IR") republicanVotes += votes;
+            if(party === "D") democraticVotes += votes;
+            else if(party === "R") republicanVotes += votes;
         });
         if(totalVotes <= 0 || (democraticVotes <= 0 && republicanVotes <= 0)) return null;
-        return ((republicanVotes - democraticVotes) / totalVotes) * 100;
+        const democratic = (democraticVotes / totalVotes) * 100;
+        const republican = (republicanVotes / totalVotes) * 100;
+        return {
+            D: democratic,
+            R: republican,
+            I: Math.max(0, 100 - democratic - republican),
+            totalVotes
+        };
     };
+    const calculateStatewideShift = (currentRace, previousRace, live = false) => {
+        const current = getStatewidePartyShares(currentRace, live);
+        const previous = getStatewidePartyShares(previousRace, false);
+        if(!current || !previous) return null;
+        const currentMargin = current.D - current.R;
+        const previousMargin = previous.D - previous.R;
+        const signedValue = currentMargin - previousMargin;
+        const value = Math.abs(signedValue);
+        return {
+            current,
+            previous,
+            currentMargin,
+            previousMargin,
+            signedValue,
+            value,
+            direction: value < 0.05 ? null : (signedValue > 0 ? "D" : "R")
+        };
+    };
+    const SHIFT_ARROW_MIN_LENGTH = 8.1;
+    const SHIFT_ARROW_MAX_LENGTH = 50;
+    const SHIFT_ARROW_GROWTH = 0.125;
+    const getStatewideShiftArrowLength = shiftPoints => SHIFT_ARROW_MIN_LENGTH
+        + ((SHIFT_ARROW_MAX_LENGTH - SHIFT_ARROW_MIN_LENGTH)
+            * (1 - Math.exp(-SHIFT_ARROW_GROWTH * Math.max(0, Number(shiftPoints) || 0))));
     const getPreviousStatewideShiftRace = (electionType, stateId) => {
         const archive = getStatewideArchive(electionType);
         const targetYear = getStatewideShiftComparisonYear(electionType);
@@ -473,8 +523,77 @@
     const removeStatewideTurnoutTooltip = () => {
         document.getElementById("bm-statewide-turnout-tooltip")?.remove();
     };
+    const removeStatewideShiftTooltip = () => {
+        document.getElementById("bm-statewide-shift-tooltip")?.remove();
+    };
+    const formatStatewideShiftShare = share => `${(Number(share) || 0).toFixed(1)}%`;
+    const hasVisibleShiftIndependent = shares => (Number(shares?.I) || 0) >= 0.05;
+    const buildStatewideShiftShareCells = (shares, showIndependent) => {
+        const entries = [
+            { key: "D", value: Number(shares?.D) || 0 },
+            { key: "R", value: Number(shares?.R) || 0 }
+        ];
+        if(showIndependent) entries.push({ key: "I", value: Number(shares?.I) || 0 });
+        return entries
+            .sort((entryA, entryB) => entryB.value - entryA.value)
+            .map(entry => `<span class="bm-shift-share bm-shift-share-${entry.key.toLowerCase()}">`
+                + `${entry.key} ${formatStatewideShiftShare(entry.value)}</span>`)
+            .join("");
+    };
+    const showStatewideShiftTooltip = (event, details) => {
+        if(!details) return;
+        let tooltip = document.getElementById("bm-statewide-shift-tooltip");
+        if(!tooltip) {
+            tooltip = document.createElement("div");
+            tooltip.id = "bm-statewide-shift-tooltip";
+            document.body.appendChild(tooltip);
+        }
+        const shift = details.shift;
+        const shiftColour = shift?.direction
+            ? stringifyColour(config.partyColours[shift.direction])
+            : null;
+        tooltip.style.setProperty("--bm-shift-colour", shiftColour || "#6c757d");
+        tooltip.style.setProperty("--bm-shift-party-d", stringifyColour(config.partyColours.D));
+        tooltip.style.setProperty("--bm-shift-party-r", stringifyColour(config.partyColours.R));
+        const showIndependent = Boolean(shift)
+            && (hasVisibleShiftIndependent(shift.previous) || hasVisibleShiftIndependent(shift.current));
+        const resultRow = (year, shares) => `
+            <div class="bm-shift-tooltip-row">
+                <span class="bm-shift-tooltip-year">${year} result</span>
+                <span class="bm-shift-tooltip-shares">${
+                    buildStatewideShiftShareCells(shares, showIndependent)
+                }</span>
+            </div>
+        `;
+        tooltip.innerHTML = !shift ? `
+            <div class="bm-shift-tooltip-state">${details.stateName}</div>
+            <div class="bm-shift-tooltip-empty">No comparable ${details.previousYear || "previous"} result is available for this state.</div>
+        ` : `
+            <div class="bm-shift-tooltip-state">${details.stateName}</div>
+            ${resultRow(details.previousYear, shift.previous)}
+            ${resultRow(details.currentYear, shift.current)}
+            <div class="bm-shift-tooltip-shift${shift.direction ? ` bm-shift-${shift.direction.toLowerCase()}` : " bm-shift-even"}">
+                ${shift.direction
+                    ? `${shift.direction} +${shift.value.toFixed(1)} shift`
+                    : "No shift"}
+            </div>
+        `;
+        tooltip.style.display = "block";
+        const margin = 12;
+        const left = Math.min(
+            event.clientX + 14,
+            window.innerWidth - tooltip.offsetWidth - margin
+        );
+        const top = Math.min(
+            event.clientY + 14,
+            window.innerHeight - tooltip.offsetHeight - margin
+        );
+        tooltip.style.left = `${Math.max(margin, left)}px`;
+        tooltip.style.top = `${Math.max(margin, top)}px`;
+    };
     const clearStatewideTurnoutFloatingUi = () => {
         removeStatewideTurnoutTooltip();
+        removeStatewideShiftTooltip();
         tooltipDiv.setAttribute("style", "display: none !important;");
         tooltipComponents.properties.visible = false;
         tooltipComponents.properties.targetDistrict = null;
@@ -523,6 +642,8 @@
     const resetStatewideShiftMode = () => {
         statewideShiftMapMode = null;
         statewideShiftComparisonYear = null;
+        statewideShiftDetailsByState.clear();
+        removeStatewideShiftTooltip();
         document.body?.classList.remove("bm-shift-mode-active");
         const shiftButton = document.getElementById("eNightShiftB");
         setClassNameIfChanged(shiftButton, "eNightMarginB");
@@ -984,6 +1105,7 @@
         removeStatewideTurnoutLegend();
         removeStatewideTurnoutTooltip();
         removeStatewideShiftOverlay(svgMap);
+        statewideShiftDetailsByState.clear();
         statewideShiftComparisonYear = getStatewideShiftComparisonYear(electionType);
         const namespace = "http://www.w3.org/2000/svg";
         const getBalancedStateArrowPoint = statePath => {
@@ -1065,36 +1187,36 @@
             }
             statePath.style.fill = "#dededb";
             const previous = getPreviousStatewideShiftRace(electionType, stateId);
-            const currentMargin = getStatewideSignedPartyMargin(currentRace, live);
-            const previousMargin = getStatewideSignedPartyMargin(previous?.race, false);
-            if(!Number.isFinite(currentMargin) || !Number.isFinite(previousMargin)) return;
-
-            const shift = (currentMargin - previousMargin) / 2;
-            const absoluteShift = Math.abs(shift);
-            if(absoluteShift < 0.01) return;
-            const shiftParty = shift > 0 ? "R" : "D";
+            const shift = calculateStatewideShift(currentRace, previous?.race, live);
+            statewideShiftDetailsByState.set(stateId, {
+                stateName: Executive?.data?.states?.[stateId.toLowerCase()]?.name || stateId,
+                currentYear: getCurrentElectionYearValue() || getElectionNightPanelYear() || "",
+                previousYear: previous?.year || statewideShiftComparisonYear || "",
+                shift
+            });
+            if(!shift?.direction) return;
+            const shiftParty = shift.direction;
+            const absoluteShift = shift.value;
             statePath.style.fill = "#f3f3f0";
             statePath.setAttribute("data-bm-shift", shiftParty);
             statePath.setAttribute("data-bm-shift-points", absoluteShift.toFixed(2));
             const placement = getBalancedStateArrowPoint(statePath);
             if(!placement) return;
 
-            const length = 22 + (Math.min(20, absoluteShift) / 20) * 14;
+            const length = getStatewideShiftArrowLength(absoluteShift);
             const halfLength = length / 2;
-            const headLength = Math.max(7.5, length * 0.29);
-            const bodyHalfWidth = Math.max(2.1, length * 0.075);
-            const headHalfWidth = Math.max(5.2, length * 0.19);
+            const chevronArm = Math.min(length * 0.36, Math.max(4.5, length * 0.26));
+            const headLength = chevronArm * 0.875;
+            const headHalfWidth = chevronArm * 0.485;
             const shoulderX = halfLength - headLength;
             const arrowData = [
-                `M ${-halfLength} ${-bodyHalfWidth}`,
-                `L ${shoulderX} ${-bodyHalfWidth}`,
-                `L ${shoulderX} ${-headHalfWidth}`,
+                `M ${-halfLength} 0`,
                 `L ${halfLength} 0`,
-                `L ${shoulderX} ${headHalfWidth}`,
-                `L ${shoulderX} ${bodyHalfWidth}`,
-                `L ${-halfLength} ${bodyHalfWidth}`,
-                "Z"
+                `M ${shoulderX} ${-headHalfWidth}`,
+                `L ${halfLength} 0`,
+                `L ${shoulderX} ${headHalfWidth}`
             ].join(" ");
+            const arrowStrokeWidth = Math.min(1.8, 1.25 + (length * 0.011));
             const arrowGroup = document.createElementNS(namespace, "g");
             arrowGroup.setAttribute("class", "bm-statewide-shift-arrow");
             arrowGroup.setAttribute("pointer-events", "none");
@@ -1103,12 +1225,23 @@
                 `translate(${placement.x} ${placement.y}) rotate(${shiftParty === "R" ? -45 : -135})`
             );
 
+            const arrowHalo = document.createElementNS(namespace, "path");
+            arrowHalo.setAttribute("d", arrowData);
+            arrowHalo.setAttribute("fill", "none");
+            arrowHalo.setAttribute("stroke", "rgba(255, 255, 255, 0.9)");
+            arrowHalo.setAttribute("stroke-width", String(arrowStrokeWidth + 1.2));
+            arrowHalo.setAttribute("stroke-linecap", "butt");
+            arrowHalo.setAttribute("stroke-linejoin", "miter");
+            arrowHalo.setAttribute("vector-effect", "non-scaling-stroke");
+            arrowGroup.appendChild(arrowHalo);
+
             const arrow = document.createElementNS(namespace, "path");
             arrow.setAttribute("d", arrowData);
-            arrow.setAttribute("fill", stringifyColour(config.partyColours[shiftParty]));
-            arrow.setAttribute("stroke", "rgba(255,255,255,0.94)");
-            arrow.setAttribute("stroke-width", "1.5");
-            arrow.setAttribute("stroke-linejoin", "round");
+            arrow.setAttribute("fill", "none");
+            arrow.setAttribute("stroke", stringifyColour(config.partyColours[shiftParty]));
+            arrow.setAttribute("stroke-width", String(arrowStrokeWidth));
+            arrow.setAttribute("stroke-linecap", "butt");
+            arrow.setAttribute("stroke-linejoin", "miter");
             arrow.setAttribute("vector-effect", "non-scaling-stroke");
             arrowGroup.appendChild(arrow);
             statePath.parentNode?.appendChild(arrowGroup);
@@ -1250,21 +1383,29 @@
                 - Number(cand1.totVotes ?? cand1.votes ?? cand1.finalVotes ?? 0)
             )[0] || null;
     };
-    const getExplicitPreviousStatewideSeatDescriptor = source => {
+    const getExplicitPreviousStatewideSeatDescriptor = (source, includeCurrentHolder = true) => {
         if(!source || typeof source !== "object") return null;
-        const partyKeys = [
-            "incumbentParty", "incumbParty", "previousParty", "priorParty",
-            "oldParty", "lastParty", "seatParty", "holderParty",
-            "defendingParty", "retiringParty", "openSeatParty"
-        ];
+        const partyKeys = includeCurrentHolder
+            ? [
+                "incumbentParty", "incumbParty", "previousParty", "priorParty",
+                "oldParty", "lastParty", "seatParty", "holderParty",
+                "defendingParty", "retiringParty", "openSeatParty"
+            ]
+            : [
+                "incumbentParty", "incumbParty", "previousParty", "priorParty",
+                "oldParty", "lastParty", "defendingParty", "retiringParty",
+                "openSeatParty"
+            ];
         for(const key of partyKeys) {
             const value = source[key];
             if(value) return typeof value === "object" ? value : { party: value };
         }
-        const holderKeys = [
-            "previousWinner", "previousIncumbent", "incumbent",
-            "officeHolder", "currentHolder", "currentSenator", "senator", "governor"
-        ];
+        const holderKeys = includeCurrentHolder
+            ? [
+                "previousWinner", "previousIncumbent", "incumbent",
+                "officeHolder", "currentHolder", "currentSenator", "senator", "governor"
+            ]
+            : ["previousWinner", "previousIncumbent", "incumbent"];
         for(const key of holderKeys) {
             const value = source[key];
             if(value) return typeof value === "object" ? value : { party: value };
@@ -1275,13 +1416,6 @@
         if(electionType === "president") {
             return getPreviousPresidentialStateWinner(stateId);
         }
-
-        if(electionType === "usSenate") {
-            const currentClassHolder = getCurrentSenateParty(stateId);
-            if(currentClassHolder) return currentClassHolder;
-        }
-        const explicitPrevious = getExplicitPreviousStatewideSeatDescriptor(currentDistrict);
-        if(explicitPrevious) return explicitPrevious;
         const incumbentCandidate = Array.isArray(currentDistrict?.cands)
             ? currentDistrict.cands.find(candidate =>
                 candidate?.incumbent === true
@@ -1290,8 +1424,21 @@
                 || /\*$/.test(String(candidate?.name || candidate?.fullName || "").trim())
             )
             : null;
+        if(electionType === "usSenate") {
+            const explicitPrevious = getExplicitPreviousStatewideSeatDescriptor(
+                currentDistrict,
+                false
+            );
+            if(explicitPrevious) return explicitPrevious;
+            const previousClassWinner = getPreviousStatewideWinner(electionType, stateId);
+            if(previousClassWinner) return previousClassWinner;
+            if(incumbentCandidate) return incumbentCandidate;
+            const currentClassHolder = getCurrentSenateParty(stateId);
+            return currentClassHolder || null;
+        }
+        const explicitPrevious = getExplicitPreviousStatewideSeatDescriptor(currentDistrict);
+        if(explicitPrevious) return explicitPrevious;
         if(incumbentCandidate) return incumbentCandidate;
-        if(electionType === "usSenate") return null;
         return getPreviousStatewideWinner(electionType, stateId);
     };
     const normalizeFlipPartyText = value => String(value || "").replace(/[^A-Za-z]/g, "").toUpperCase();
@@ -1307,13 +1454,13 @@
             || normalized === "INDD"
             || normalized.includes("INDEPENDENTDEM")
             || normalized.includes("INDDEM")
-        ) return "D";
+        ) return "ID";
         if(
             normalized === "IR"
             || normalized === "INDR"
             || normalized.includes("INDEPENDENTREP")
             || normalized.includes("INDREP")
-        ) return "R";
+        ) return "IR";
         return normalized ? "I" : null;
     };
     const getPlayerGovernorCountyArchive = () => {
@@ -1326,19 +1473,164 @@
             return [];
         }
     };
+    const getArchivedGovernorCandidates = race => {
+        if(Array.isArray(race?.cands)) return race.cands;
+        if(Array.isArray(race?.candidates)) return race.candidates;
+        return [];
+    };
+    const getArchivedGovernorCandidateVariant = candidate => {
+        const archivedVariant = getCandidateVariantPartyKey(candidate);
+        if(String(archivedVariant || "").startsWith("I")) return archivedVariant;
+        const candidateId = candidate?.id
+            ?? candidate?.candID
+            ?? candidate?.candidateId
+            ?? candidate?.candidateID;
+        if(candidateId !== undefined && candidateId !== null) {
+            try {
+                const character = findCandByID([candidateId])?.[0];
+                const wrapped = Executive?.data?.characters?.wrapCharacter(
+                    character,
+                    "candidate"
+                );
+                const runtimeVariant = getCandidateVariantPartyKey({
+                    party: wrapped?.extendedAttribs?.party || wrapped?.party,
+                    caucusParty: wrapped?.caucusParty
+                        || wrapped?.caucus
+                        || wrapped?.extendedAttribs?.caucusParty
+                        || wrapped?.extendedAttribs?.caucus
+                });
+                if(String(runtimeVariant || "").startsWith("I")) {
+                    return runtimeVariant;
+                }
+            } catch {}
+        }
+        const statewideVariant = getStatewideShiftCandidateParty(candidate);
+        if(statewideVariant) return statewideVariant;
+        return archivedVariant;
+    };
+    const getArchivedCountyWinnerReference = county => {
+        if(!county || typeof county !== "object") return null;
+        const objectWinner = county.winner
+            || county.winningCandidate
+            || county.winnerCandidate
+            || county.candidate;
+        if(objectWinner && typeof objectWinner === "object") return objectWinner;
+        if(typeof objectWinner === "string" && objectWinner.trim()) {
+            return { name: objectWinner.trim() };
+        }
+        const id = county.winnerId
+            ?? county.winnerID
+            ?? county.winnerCandidateId
+            ?? county.winnerCandidateID
+            ?? county.candidateId
+            ?? county.candidateID;
+        if(id !== undefined && id !== null && String(id).trim()) {
+            return { id };
+        }
+        const name = county.winnerName
+            || county.winningCandidateName
+            || county.candidateName;
+        return name ? { name } : null;
+    };
+    const findArchivedGovernorCandidate = (reference, candidates) => {
+        if(!reference) return null;
+        const referenceId = reference.id
+            ?? reference.candID
+            ?? reference.candidateId
+            ?? reference.candidateID;
+        if(referenceId !== undefined && referenceId !== null) {
+            const idMatch = candidates.find(candidate => {
+                const candidateId = candidate?.id
+                    ?? candidate?.candID
+                    ?? candidate?.candidateId
+                    ?? candidate?.candidateID;
+                return candidateId !== undefined
+                    && candidateId !== null
+                    && String(candidateId) === String(referenceId);
+            });
+            if(idMatch) return idMatch;
+        }
+        const referenceName = String(
+            reference.name
+            || reference.fullName
+            || reference.displayName
+            || ""
+        ).replace(/\*+$/, "").replace(/\s+/g, " ").trim().toLowerCase();
+        if(!referenceName) return null;
+        return candidates.find(candidate =>
+            String(getPanelCandidateName(candidate) || "")
+                .replace(/\*+$/, "")
+                .replace(/\s+/g, " ")
+                .trim()
+                .toLowerCase() === referenceName
+        ) || null;
+    };
+    const getArchivedGovernorCandidateIdentity = candidate => {
+        const id = candidate?.id
+            ?? candidate?.candID
+            ?? candidate?.candidateId
+            ?? candidate?.candidateID;
+        if(id !== undefined && id !== null && String(id).trim()) {
+            return `id:${String(id).trim()}`;
+        }
+        const name = String(getPanelCandidateName(candidate) || "")
+            .replace(/\*+$/, "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+        return name ? `name:${name}` : "";
+    };
+    const isSameGovernorElectionResult = (archiveRace, currentRace) => {
+        const archivedCandidates = getArchivedGovernorCandidates(archiveRace);
+        const currentCandidates = getArchivedGovernorCandidates(currentRace);
+        if(archivedCandidates.length < 2 || currentCandidates.length < 2) return false;
+        const archivedIdentities = new Set(
+            archivedCandidates.map(getArchivedGovernorCandidateIdentity).filter(Boolean)
+        );
+        const sharedIdentities = currentCandidates
+            .map(getArchivedGovernorCandidateIdentity)
+            .filter(identity => identity && archivedIdentities.has(identity));
+        if(sharedIdentities.length >= 2) return true;
+
+        const archivedTotal = archivedCandidates.reduce((sum, candidate) =>
+            sum + Math.max(0, Number(
+                candidate?.votes
+                ?? candidate?.totVotes
+                ?? candidate?.finalVotes
+            ) || 0), 0);
+        const currentTotal = currentCandidates.reduce((sum, candidate) =>
+            sum + Math.max(0, Number(
+                candidate?.votes
+                ?? candidate?.totVotes
+                ?? candidate?.finalVotes
+            ) || 0), 0);
+        if(archivedTotal <= 0 || currentTotal <= 0) return false;
+        return Math.abs(archivedTotal - currentTotal) <= Math.max(2, currentTotal * 0.000001)
+            && sharedIdentities.length >= 1;
+    };
     const getPreviousGovernorCountyWinnerMap = (stateId, currentRace) => {
         const normalizedState = String(stateId || "").toUpperCase();
-        const currentRaceYear = Number(
-            currentRace?.year
-            ?? currentRace?.electionYear
-            ?? getCurrentElectionYearValue()
+        const archive = getPlayerGovernorCountyArchive();
+        const matchingCurrentArchive = archive
+            .filter(entry =>
+                entry?.category === "general"
+                && getArchivedRaceStateCode(entry) === normalizedState
+                && isSameGovernorElectionResult(entry, currentRace)
+            )
+            .sort((left, right) => Number(right?.year) - Number(left?.year))[0];
+        const explicitCurrentRaceYear = Number(
+            currentRace?.year ?? currentRace?.electionYear
         );
-        const previousRace = getPlayerGovernorCountyArchive()
+        const currentRaceYear = Number.isFinite(explicitCurrentRaceYear)
+            ? explicitCurrentRaceYear
+            : Number(matchingCurrentArchive?.year ?? getCurrentElectionYearValue());
+        const previousRace = archive
             .filter(entry =>
                 entry?.category === "general"
                 && getArchivedRaceStateCode(entry) === normalizedState
                 && Array.isArray(entry?.counties)
                 && entry.counties.length > 0
+                && entry !== matchingCurrentArchive
                 && (
                     !Number.isFinite(currentRaceYear)
                     || Number(entry?.year) < currentRaceYear
@@ -1346,27 +1638,76 @@
             )
             .sort((entryA, entryB) => Number(entryB?.year) - Number(entryA?.year))[0];
         if(!previousRace) return null;
+        const archivedCandidates = getArchivedGovernorCandidates(previousRace);
+        const archivedStatewideWinner = archivedCandidates.slice().sort(
+            (left, right) => (
+                Math.max(0, Number(
+                    right?.votes
+                    ?? right?.totVotes
+                    ?? right?.finalVotes
+                ) || 0)
+                - Math.max(0, Number(
+                    left?.votes
+                    ?? left?.totVotes
+                    ?? left?.finalVotes
+                ) || 0)
+            )
+        )[0] || null;
+        const hasIndependentStatewideWinner = Boolean(
+            archivedStatewideWinner
+            && String(
+                getArchivedGovernorCandidateVariant(archivedStatewideWinner) || ""
+            ).startsWith("I")
+            && Math.max(0, Number(
+                archivedStatewideWinner?.votes
+                ?? archivedStatewideWinner?.totVotes
+                ?? archivedStatewideWinner?.finalVotes
+            ) || 0) > 0
+        );
         const winners = new Map();
+        let hasUnverifiableIndependentCounty = false;
         previousRace.counties.forEach(county => {
             const countyKey = normalizePrimaryCountyName(county?.name, normalizedState);
-            const partyBlock = getFlipComparisonPartyBlock(
-                county?.winParty
-                || county?.winnerParty
-                || county?.party
+            const winnerReference = getArchivedCountyWinnerReference(county);
+            const winnerCandidate = findArchivedGovernorCandidate(
+                winnerReference,
+                archivedCandidates
             );
+            if(hasIndependentStatewideWinner && !winnerCandidate) {
+                hasUnverifiableIndependentCounty = true;
+            }
+            const partyBlock = winnerCandidate
+                ? getFlipComparisonPartyBlock(
+                    getArchivedGovernorCandidateVariant(winnerCandidate)
+                )
+                : getFlipComparisonPartyBlock(
+                    county?.winParty
+                    || county?.winnerParty
+                    || county?.party
+                );
             if(countyKey && partyBlock) winners.set(countyKey, partyBlock);
         });
         return winners.size > 0
-            ? { year: Number(previousRace.year) || null, winners }
+            ? {
+                year: Number(previousRace.year) || null,
+                winners,
+                reliable: !hasUnverifiableIndependentCounty,
+                unavailableReason: hasUnverifiableIndependentCounty
+                    ? "independent-county-winner-not-recorded"
+                    : ""
+            }
             : null;
     };
-    const isGovernorCountyFlipModeAvailable = (electionType, stateId, currentRace, live) => Boolean(
-        electionType === "governor"
-        && !isStatewidePrimaryRace(currentRace)
-        && getRcvRaceReporting(currentRace, live) >= 99.999
-
-        && getPreviousGovernorCountyWinnerMap(stateId, currentRace)
-    );
+    const isGovernorCountyFlipModeAvailable = (electionType, stateId, currentRace, live) => {
+        if(
+            electionType !== "governor"
+            || isStatewidePrimaryRace(currentRace)
+            || getRcvRaceReporting(currentRace, live) < 99.999
+        ) return false;
+        const previousResults = getPreviousGovernorCountyWinnerMap(stateId, currentRace);
+        if(!previousResults) return false;
+        return live !== true || previousResults.reliable === true;
+    };
     const getFlipCandidateIdentity = candidate => {
         if(!candidate || typeof candidate !== "object") return "";
         const id = candidate.id
@@ -1406,6 +1747,30 @@
         if(tokensB.length === 1 && tokensA[tokensA.length - 1] === tokensB[0]) return true;
         return false;
     };
+    const HOUSE_SEAT_BALANCE_TIE_EDGE_LIGHTNESS = 82;
+    const HOUSE_SEAT_BALANCE_MIN_SATURATION_SCALE = 0.55;
+    const getHousePoliticianSeatBalanceColour = stateSummary => {
+        const democraticSeats = Math.max(0, Number(stateSummary?.projectedDem) || 0);
+        const republicanSeats = Math.max(0, Number(stateSummary?.projectedRep) || 0);
+        const totalSeats = democraticSeats + republicanSeats;
+        if(totalSeats <= 0) return null;
+        if(democraticSeats === republicanSeats) {
+            return stringifyColour(config.partyColours.HouseTie);
+        }
+        const leadParty = democraticSeats > republicanSeats ? "D" : "R";
+        const baseColour = config.partyColours[leadParty];
+        const seatDominance = Math.abs(democraticSeats - republicanSeats) / totalSeats;
+        const saturationScale = HOUSE_SEAT_BALANCE_MIN_SATURATION_SCALE
+            + ((1 - HOUSE_SEAT_BALANCE_MIN_SATURATION_SCALE) * seatDominance);
+        const saturation = Math.max(0, Math.min(100, Number(baseColour.s) * saturationScale));
+        const lightness = HOUSE_SEAT_BALANCE_TIE_EDGE_LIGHTNESS
+            + ((Number(baseColour.l) - HOUSE_SEAT_BALANCE_TIE_EDGE_LIGHTNESS) * seatDominance);
+        return stringifyColour({
+            h: baseColour.h,
+            s: Math.round(saturation * 10) / 10,
+            l: Math.round(lightness * 10) / 10
+        });
+    };
     const updateMap = (svgMap, resultColours, electionType, live, projected) => {
         svgMap.setAttribute("data-colours", JSON.stringify(resultColours));
         if(isStatewideShiftModeSelected(electionType)) {
@@ -1420,6 +1785,24 @@
         removeStatewideTurnoutLegend();
         applyNationalElectionMapOutlines(svgMap, electionType, live);
         const resultKeys = Object.keys(resultColours);
+        const isPrimaryControlPage = live === true && (
+            isPrimaryElectionNightPage()
+            || (
+                electionType === "usSenate"
+                && resultKeys.some(stateId => isStatewidePrimaryRace(
+                    getStatewideRaceForMap(electionType, stateId, { allowArchive: false })
+                ))
+            )
+            || (
+                electionType === "usHouse"
+                && resultKeys.some(stateId => isHousePrimaryState(
+                    getStatewideRaceForMap(electionType, stateId, { allowArchive: false })
+                ))
+            )
+        );
+        if(electionType === "usSenate" || electionType === "usHouse") {
+            svgMap.setAttribute("data-bm-primary-election", isPrimaryControlPage ? "true" : "false");
+        }
         if (electionType === "usHouse" && live) {
             svgMap.querySelectorAll(".better-maps-state-path").forEach(path => {
                 const stateId = getStateIdFromMapPath(path);
@@ -1429,21 +1812,15 @@
             });
         }
         const raceInfoCache = {};
-        const majorities = [];
-        let majorityScale = null;
-        if(electionType === "usHouse" || electionType === "usHousePol") {
-            majorityScale = getAbsoluteElectionMarginScaleNum;
-        } else if(!projected) {
+        if(electionType !== "usHouse" && electionType !== "usHousePol" && !projected) {
             resultKeys.forEach(stateId => {
                 const currentDistrict = resultProxies[electionType][stateId];
                 if(currentDistrict !== undefined && currentDistrict.cands !== undefined) {
                     raceInfoCache[stateId] = getRaceInfo(currentDistrict, live);
                     const distMajority = raceInfoCache[stateId].currentLead / (live ? currentDistrict.totalCurrVotes : currentDistrict.totalVotes);
-                    if(distMajority !== 1) majorities.push(distMajority);
                     raceInfoCache[stateId].currentMajority = distMajority;
                 }
             });
-            majorityScale = createElectionMarginScale(majorities);
         }
         resultKeys.forEach(stateId => {
             const currentDistrict = getStatewideRaceForMap(electionType, stateId, { allowArchive: !live });
@@ -1508,7 +1885,9 @@
                 let raceInfo = null;
                 let newColour = null;
                 if(electionType === "usHouse" || electionType === "usHousePol") {
-                    if (isHousePrimaryStateMap) {
+                    if(electionType === "usHousePol") {
+                        newColour = getHousePoliticianSeatBalanceColour(currentDistrict);
+                    } else if (isHousePrimaryStateMap) {
                         newColour = getHousePrimaryStateColour(stateId, currentDistrict, live)
                             || MAP_PRIMARY_ELECTION_PENDING_FILL;
                     } else {
@@ -1518,17 +1897,11 @@
                     const baseColour = config.partyColours[leadParty];
                     const majority = ((leadParty === "D") ? (currentDistrict.projectedDem - currentDistrict.projectedRep) : (currentDistrict.projectedRep - currentDistrict.projectedDem))
                                         / (currentDistrict.projectedDem + currentDistrict.projectedRep);
-                    if(currentDistrict.projectedDem - currentDistrict.projectedRep === 0) newColour = (electionType === "usHousePol")
-                        ? "#994abd"
-                        : stringifyColour(config.partyColours.HouseTie);
+                    if(currentDistrict.projectedDem - currentDistrict.projectedRep === 0) {
+                        newColour = stringifyColour(config.partyColours.HouseTie);
+                    }
                     else {
-                        const scaleNum = getAbsoluteElectionMarginScaleNum(majority);
-                        const inverseLightness = (100 - baseColour.l) * scaleNum;
-                        newColour = stringifyColour({
-                            h: baseColour.h,
-                            s: baseColour.s * scaleNum,
-                            l: Math.max(100 - inverseLightness, 15)
-                        });
+                        newColour = stringifyColour(getElectionMarginColour(baseColour, majority));
                     }
                         }
                     }
@@ -1590,14 +1963,9 @@
                     if(raceInfo === undefined || raceInfo.currentLead === 0) newColour = resultColours[stateId];
                     else {
                         const baseColour = getCandidateColourForRace(raceInfo.currentLeader, currentDistrict);
-                        const scaleNum = (raceInfo.currentMajority !== 1) ? majorityScale(raceInfo.currentMajority)
-                            : majorityScale(d3.max(majorities));
-                        const inverseLightness = (100 - baseColour.l) * scaleNum;
-                        newColour = stringifyColour({
-                            h: baseColour.h,
-                            s: baseColour.s * scaleNum,
-                            l: Math.max(100 - inverseLightness, 15)
-                        });
+                        newColour = stringifyColour(
+                            getElectionMarginColour(baseColour, raceInfo.currentMajority)
+                        );
                     }
                 }
                 const statePathId = stateId + "-state-path" + (live ? "-live" : "");
@@ -1612,13 +1980,13 @@
             }
         });
         if (electionType === "usSenate") {
-            try { updateSenateControlBanner({ live, onCountyMap, svgMap }); } catch (e) {}
+            try { updateSenateControlBanner({ live, onCountyMap, svgMap, isPrimary: isPrimaryControlPage }); } catch (e) {}
             const houseEl = document.getElementById("bm-house-banner");
             if (houseEl) { houseEl.classList.remove("show"); houseEl.innerHTML = ""; }
             const presidentEl = document.getElementById("bm-president-elect-banner");
             if (presidentEl) { presidentEl.classList.remove("show"); presidentEl.innerHTML = ""; }
         } else if (electionType === "usHouse") {
-            try { updateHouseControlBanner({ live, onCountyMap, svgMap }); } catch (e) {}
+            try { updateHouseControlBanner({ live, onCountyMap, svgMap, isPrimary: isPrimaryControlPage }); } catch (e) {}
             const senateEl = document.getElementById("bm-senate-banner");
             if (senateEl) { senateEl.classList.remove("show"); senateEl.innerHTML = ""; }
             const presidentEl = document.getElementById("bm-president-elect-banner");
@@ -1775,17 +2143,6 @@
         return stateRace;
     };
     const updatePrimaryCountyMap = (svgMap, electionType, live) => {
-        const stateRace = getStatewideRaceForMap(electionType, activeMap, { allowArchive: !live });
-        if(
-            live === true
-            && isStatewidePrimaryRace(stateRace)
-            && !hasLiveStatewidePrimaryRaceStarted(activeMap, stateRace, activePrimaryCountyParty)
-        ) {
-            svgMap?.querySelectorAll?.(".better-maps-state-path").forEach(pathElement => {
-                pathElement.style.fill = "#cccccc";
-            });
-            return false;
-        }
         const result = buildPrimaryCountyResults(
             activeMap,
             activePrimaryCountyParty,
@@ -1798,41 +2155,57 @@
             return false;
         }
         const primaryColourScope = electionType === "president"
-            ? (result.colourScope || `presidential-primary:${activePrimaryCountyParty || result.party || "N"}`)
+            ? (result.colourScope || `presidential-primary:${String(activeMap || "").toLowerCase()}:${activePrimaryCountyParty || result.party || "N"}`)
             : `statewide-primary:${String(activeMap || "").toLowerCase()}:${activePrimaryCountyParty || result.party || "N"}`;
         const primaryColourRace = {
             cands: result.candidates,
             colourScope: primaryColourScope
         };
-        result.candidates.forEach(candidate =>
-            getCandidateColourForRace(candidate, primaryColourRace));
-        const margins = result.counties.map(county => {
-            const raceInfo = getRaceInfo(county, live);
-            const total = live ? county.totalCurrVotes : county.totalVotes;
-            return total > 0 ? raceInfo.currentLead / total : 0;
-        }).filter(Number.isFinite);
-        const majorityScale = createElectionMarginScale(margins);
+        result.candidates.forEach(candidate => {
+            candidate.candidateColour = stringifyColour(
+                getCandidateColourForRace(candidate, primaryColourRace)
+            );
+        });
         result.counties.forEach(county => {
+            county.cands.forEach((candidate, candidateIndex) => {
+                const statewideCandidate = resolveElectionCandidate(
+                    candidate,
+                    result.candidates,
+                    candidateIndex
+                );
+                candidate.portraitSource = statewideCandidate;
+                candidate.candidateColour = statewideCandidate?.candidateColour
+                    || stringifyColour(
+                        getCandidateColourForRace(
+                            statewideCandidate || candidate,
+                            primaryColourRace
+                        )
+                    );
+            });
             const raceInfo = getRaceInfo(county, live);
-            if(!raceInfo.currentLeader) return;
             const total = live ? county.totalCurrVotes : county.totalVotes;
+            const pathElement = getCountyMapPathElement(svgMap, county.name, live);
+            if(!pathElement) return;
+            if(total <= 0 || !raceInfo.currentLeader) {
+                pathElement.style.fill = getElectionPendingStateFill(activeMap, true);
+                return;
+            }
             const margin = total > 0 ? raceInfo.currentLead / total : 0;
-            const baseColour = getCandidateColourForRace(
+            const leaderIndex = county.cands.indexOf(raceInfo.currentLeader);
+            const statewideLeader = resolveElectionCandidate(
                 raceInfo.currentLeader,
+                result.candidates,
+                leaderIndex
+            );
+            const baseColour = getCandidateColourForRace(
+                statewideLeader || raceInfo.currentLeader,
                 primaryColourRace
             );
             let colour = stringifyColour(baseColour);
             if(activeCountyMapMode === MAP_MODES.MARGIN) {
-                const scale = majorityScale(margin);
-                const inverseLightness = (100 - baseColour.l) * scale;
-                colour = stringifyColour({
-                    h: baseColour.h,
-                    s: Math.min(100, baseColour.s * scale),
-                    l: Math.max(100 - inverseLightness, 18)
-                });
+                colour = stringifyColour(getElectionMarginColour(baseColour, margin));
             }
-            const pathElement = getCountyMapPathElement(svgMap, county.name, live);
-            if(pathElement) pathElement.style.fill = colour;
+            pathElement.style.fill = colour;
         });
         return true;
     };
@@ -1842,6 +2215,151 @@
             renderedMode === MAP_MODES.WINNER_RCV
             || renderedMode === MAP_MODES.MARGIN_RCV
         );
+    };
+    const getElectionCandidateIdentityValues = candidate => {
+        const values = new Set();
+        const sources = [
+            candidate,
+            candidate?.source,
+            candidate?.candidate,
+            candidate?.character,
+            candidate?.politician
+        ].filter(source => source && typeof source === "object");
+        sources.forEach(source => {
+            [
+                source.id,
+                source.ID,
+                source.candID,
+                source.candidateId,
+                source.candidateID,
+                source.characterId,
+                source.characterID,
+                source.politicianId,
+                source.politicianID,
+                source.extendedAttribs?.id,
+                source.extendedAttribs?.ID,
+                source.extendedAttribs?.candidateId,
+                source.extendedAttribs?.candidateID,
+                source.extendedAttribs?.characterId,
+                source.extendedAttribs?.characterID
+            ].forEach(value => {
+                const normalized = String(value ?? "").trim().toLowerCase();
+                if(normalized) values.add(normalized);
+            });
+        });
+        return values;
+    };
+    const normalizeElectionCandidateName = value => String(value || "")
+        .replace(/\*+$/, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+    const getElectionCandidateComparableNames = candidate => {
+        const fullNames = new Set();
+        const surnames = new Set();
+        const sources = [
+            candidate,
+            candidate?.source,
+            candidate?.candidate,
+            candidate?.character,
+            candidate?.politician
+        ].filter(source => source && typeof source === "object");
+        sources.forEach(source => {
+            [
+                source.name,
+                source.fullName,
+                source.displayName,
+                [source.first, source.last].filter(Boolean).join(" "),
+                [source.firstName, source.lastName].filter(Boolean).join(" ")
+            ].forEach(value => {
+                const normalized = normalizeElectionCandidateName(value);
+                if(!normalized) return;
+                const pieces = normalized.split(/\s+/).filter(Boolean);
+                if(pieces.length > 1) fullNames.add(normalized);
+                surnames.add(pieces[pieces.length - 1]);
+            });
+            [source.last, source.lastName].forEach(value => {
+                const normalized = normalizeElectionCandidateName(value);
+                if(normalized) surnames.add(normalized);
+            });
+        });
+        const panelName = normalizeElectionCandidateName(getPanelCandidateName(candidate));
+        if(panelName) surnames.add(panelName);
+        return { fullNames, surnames };
+    };
+    const getElectionCandidatePartyForMatch = candidate => {
+        const sources = [
+            candidate,
+            candidate?.source,
+            candidate?.candidate,
+            candidate?.character,
+            candidate?.politician
+        ].filter(source => source && typeof source === "object");
+        const hasPartyMetadata = sources.some(source =>
+            source.party !== undefined
+            || source.caucus !== undefined
+            || source.caucusParty !== undefined
+            || source.extendedAttribs?.party !== undefined
+            || source.extendedAttribs?.caucusParty !== undefined
+        );
+        if(!hasPartyMetadata) return "";
+        const party = String(getCandidateVariantPartyKey(candidate) || "").toUpperCase();
+        if(party === "ID") return "D";
+        if(party === "IR") return "R";
+        return party;
+    };
+    const resolveElectionCandidate = (
+        candidate,
+        candidates,
+        fallbackIndex = -1
+    ) => {
+        if(!candidate || !Array.isArray(candidates) || candidates.length === 0) {
+            return candidate;
+        }
+        const candidateIds = getElectionCandidateIdentityValues(candidate);
+        if(candidateIds.size) {
+            const idMatches = candidates.filter(entry => {
+                const entryIds = getElectionCandidateIdentityValues(entry);
+                for(const id of candidateIds) {
+                    if(entryIds.has(id)) return true;
+                }
+                return false;
+            });
+            if(idMatches.length === 1) return idMatches[0];
+        }
+        const candidateNames = getElectionCandidateComparableNames(candidate);
+        if(candidateNames.fullNames.size) {
+            const fullNameMatches = candidates.filter(entry => {
+                const entryNames = getElectionCandidateComparableNames(entry);
+                for(const name of candidateNames.fullNames) {
+                    if(entryNames.fullNames.has(name)) return true;
+                }
+                return false;
+            });
+            if(fullNameMatches.length === 1) return fullNameMatches[0];
+        }
+        let surnameMatches = candidates.filter(entry => {
+            const entryNames = getElectionCandidateComparableNames(entry);
+            for(const surname of candidateNames.surnames) {
+                if(entryNames.surnames.has(surname)) return true;
+            }
+            return false;
+        });
+        const candidateParty = getElectionCandidatePartyForMatch(candidate);
+        if(candidateParty && surnameMatches.length > 1) {
+            surnameMatches = surnameMatches.filter(entry =>
+                getElectionCandidatePartyForMatch(entry) === candidateParty
+            );
+        }
+        if(surnameMatches.length === 1) return surnameMatches[0];
+        if(
+            Number.isInteger(fallbackIndex)
+            && fallbackIndex >= 0
+            && fallbackIndex < candidates.length
+        ) {
+            return candidates[fallbackIndex];
+        }
+        return candidate;
     };
     const updateCountyMap = (svgMap, electionType, live) => {
         const normalStateRace = getStatewideRaceWithMapSubdivisions(
@@ -1866,8 +2384,8 @@
             (electionType === "president" || electionType === "usSenate" || electionType === "governor")
             && isStatewidePrimaryRace(currentStateRace)
             && activePrimaryCountyParty
-            && updatePrimaryCountyMap(svgMap, electionType, live)
         ) {
+            updatePrimaryCountyMap(svgMap, electionType, live);
             return;
         }
         const currentOrigCounties = currentStateRace.counties;
@@ -1883,63 +2401,51 @@
             : null;
         const newCounties = [];
         const stateElectData = allStElectData.filter(electData => (electData.id === activeMap))[0];
-        const majorities = [];
         const raceInfoCache = {};
+        const primaryCandidateGroup = isStatewidePrimaryRace(currentStateRace)
+            ? (activePrimaryCountyParty === "D"
+                ? currentStateRace?.dem
+                : (activePrimaryCountyParty === "R"
+                    ? currentStateRace?.rep
+                    : (activePrimaryCountyParty === "N"
+                        ? currentStateRace?.allCands
+                        : (currentStateRace?.allCands?.cands?.length
+                            ? currentStateRace.allCands
+                            : null))))
+            : null;
         const statewideCandidates = Array.isArray(currentStateRace?.cands)
             ? currentStateRace.cands
-            : [];
-        const getStatewideCandidateForCounty = countyCandidate => {
-            if(!countyCandidate || statewideCandidates.length === 0) return countyCandidate;
-            const countyCandidateName = String(getPanelCandidateName(countyCandidate) || "")
-                .replace(/\*+$/, "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .toLowerCase();
-            if(countyCandidateName) {
-                const nameMatch = statewideCandidates.find(candidate =>
-                    String(getPanelCandidateName(candidate) || "")
-                        .replace(/\*+$/, "")
-                        .replace(/\s+/g, " ")
-                        .trim()
-                        .toLowerCase() === countyCandidateName
-                );
-                if(nameMatch) return nameMatch;
-            }
-            const countyCandidateId = countyCandidate?.id
-                ?? countyCandidate?.candID
-                ?? countyCandidate?.candidateId
-                ?? countyCandidate?.candidateID;
-            if(countyCandidateId !== undefined && countyCandidateId !== null) {
-                const idMatch = statewideCandidates.find(candidate => {
-                    const candidateId = candidate?.id
-                        ?? candidate?.candID
-                        ?? candidate?.candidateId
-                        ?? candidate?.candidateID;
-                    return candidateId !== undefined
-                        && candidateId !== null
-                        && String(candidateId) === String(countyCandidateId);
-                });
-                if(idMatch) return idMatch;
-            }
-            return countyCandidate;
-        };
+            : (Array.isArray(primaryCandidateGroup?.cands)
+                ? primaryCandidateGroup.cands
+                : []);
+        const statewideColourRace = Array.isArray(currentStateRace?.cands)
+            ? currentStateRace
+            : {
+                cands: statewideCandidates,
+                colourScope: `statewide-primary:${String(activeMap || "").toLowerCase()}:${activePrimaryCountyParty || "N"}`
+            };
         statewideCandidates.forEach(candidate =>
-            getCandidateColourForRace(candidate, currentStateRace)
+            getCandidateColourForRace(candidate, statewideColourRace)
         );
         currentOrigCounties.forEach(origCounty => {
             let totalCurrVotes = 0;
             let totalVotes = 0;
             const newCounty = {
                 name: origCounty.name,
-                cands: origCounty.cands.map(candObj => {
+                cands: origCounty.cands.map((candObj, candidateIndex) => {
                     const newCandObj = Object.assign({}, candObj);
-                    const statewideCandidate = getStatewideCandidateForCounty(candObj);
+                    const statewideCandidate = resolveElectionCandidate(
+                        candObj,
+                        statewideCandidates,
+                        candidateIndex
+                    );
                     const candidateColour = stringifyColour(
-                        getCandidateColourForRace(statewideCandidate, currentStateRace)
+                        getCandidateColourForRace(statewideCandidate, statewideColourRace)
                     );
 
                     candObj.candidateColour = candidateColour;
                     newCandObj.candidateColour = candidateColour;
+                    newCandObj.portraitSource = statewideCandidate;
                     if(!live){
                         newCandObj.currentVotes = newCandObj.votes;
                     } else if(
@@ -1965,34 +2471,45 @@
             newCounties.push(newCounty);
             raceInfoCache[newCounty.name] = getRaceInfo(newCounty, live);
             const distMajority = raceInfoCache[newCounty.name].currentLead / (live ? totalCurrVotes : totalVotes);
-            if(distMajority !== 1) majorities.push(distMajority);
             raceInfoCache[newCounty.name].currentMajority = distMajority;
         });
-        const majorityScale = createElectionMarginScale(majorities);
         newCounties.forEach(county => {
             const raceInfo = raceInfoCache[county.name];
-            const statewideLeader = getStatewideCandidateForCounty(raceInfo.currentLeader);
-            const baseColour = partisanPrimary
-                ? getCandidateColour(raceInfo.currentLeader)
-                : activeCountyMapMode === MAP_MODES.FLIP_COUNTIES
-                    ? getCandidateColour(statewideLeader || raceInfo.currentLeader)
-                    : getCandidateColourForRace(statewideLeader, currentStateRace);
+            const displayedCountyVotes = Math.max(
+                0,
+                Number(live ? county.totalCurrVotes : county.totalVotes) || 0
+            );
+            const statewideLeader = resolveElectionCandidate(
+                raceInfo.currentLeader,
+                statewideCandidates,
+                county.cands.indexOf(raceInfo.currentLeader)
+            );
             let newColour;
-            if(
-                activeCountyMapMode === MAP_MODES.WINNER
-                || activeCountyMapMode === MAP_MODES.FLIP_COUNTIES
-                || activeCountyMapMode === MAP_MODES.WINNER_RCV
-            ) {
-                newColour = stringifyColour(baseColour);
+            if(displayedCountyVotes <= 0 || !raceInfo.currentLeader) {
+                newColour = getElectionPendingStateFill(activeMap, partisanPrimary);
             } else {
-                const scaleNum = (raceInfo.currentMajority !== 1) ? majorityScale(raceInfo.currentMajority)
-                    : majorityScale(d3.max(majorities));
-                const inverseLightness = (100 - baseColour.l) * scaleNum;
-                newColour = stringifyColour({
-                    h: baseColour.h,
-                    s: baseColour.s * scaleNum,
-                    l: Math.max(100 - inverseLightness, 15)
-                });
+                const baseColour = partisanPrimary
+                    ? getCandidateColourForRace(
+                        statewideLeader || raceInfo.currentLeader,
+                        statewideColourRace
+                    )
+                    : activeCountyMapMode === MAP_MODES.FLIP_COUNTIES
+                        ? getCandidateColour(statewideLeader || raceInfo.currentLeader)
+                        : getCandidateColourForRace(
+                            statewideLeader || raceInfo.currentLeader,
+                            statewideColourRace
+                        );
+                if(
+                    activeCountyMapMode === MAP_MODES.WINNER
+                    || activeCountyMapMode === MAP_MODES.FLIP_COUNTIES
+                    || activeCountyMapMode === MAP_MODES.WINNER_RCV
+                ) {
+                    newColour = stringifyColour(baseColour);
+                } else {
+                    newColour = stringifyColour(
+                        getElectionMarginColour(baseColour, raceInfo.currentMajority)
+                    );
+                }
             }
             const pathElement = getCountyMapPathElement(svgMap, county.name, live);
             if(!pathElement) return;
@@ -2012,7 +2529,9 @@
             const governorCountyFlipped = Boolean(
                 electionType === "governor"
                 && activeCountyMapMode === MAP_MODES.FLIP_COUNTIES
+                && displayedCountyVotes > 0
                 && countyFullyReported
+                && previousGovernorCountyResults?.reliable === true
                 && previousCountyParty
                 && currentCountyParty
                 && previousCountyParty !== currentCountyParty
@@ -2105,24 +2624,11 @@
             (Number(b.currentVotes) || 0) - (Number(a.currentVotes) || 0));
         const total = ranked.reduce((sum, candidate) =>
             sum + (Number(candidate.currentVotes) || 0), 0);
-        const getCandidateIdentity = candidate => {
-            const id = candidate?.id
-                ?? candidate?.candID
-                ?? candidate?.candidateId
-                ?? candidate?.candidateID;
-            return id !== undefined && id !== null ? String(id) : "";
-        };
         const getFirstRoundCandidate = finalist => {
-            const finalistId = getCandidateIdentity(finalist);
-            if(finalistId) {
-                const idMatch = (sourceCounty?.cands || []).find(candidate =>
-                    getCandidateIdentity(candidate) === finalistId
-                );
-                if(idMatch) return idMatch;
-            }
-            const finalistName = normalize(getPanelCandidateName(finalist));
-            return (sourceCounty?.cands || []).find(candidate =>
-                normalize(getPanelCandidateName(candidate)) === finalistName
+            return resolveElectionCandidate(
+                finalist,
+                sourceCounty?.cands || [],
+                county.cands.indexOf(finalist)
             ) || null;
         };
         renderPrecinctResultsTooltip({
@@ -2208,8 +2714,9 @@
         return pattern;
     };
     const createGainPattern = (party) => {
-        const partyCol = (party.charAt(0) === "I") ? (config.partyColours.I[party.charAt(1)])
-                                : (config.partyColours[party.charAt(0)]);
+        const partyCol = party.charAt(0) === "I"
+            ? (config.partyColours.I[party.charAt(1)] || config.partyColours.I.default)
+            : config.partyColours[party.charAt(0)];
         const pattern = document.createElementNS("http://www.w3.org/2000/svg", "pattern");
         pattern.setAttribute("width", String(FLIP_PATTERN_SIZE));
         pattern.setAttribute("height", String(FLIP_PATTERN_SIZE));
@@ -2559,31 +3066,72 @@
         if (normalized === "I") return stringifyColour(config.partyColours.I.default);
         return stringifyColour(config.partyColours[normalized] || config.partyColours.I.default);
     };
-    const ELECTION_MARGIN_MIN_SCALE = 0.6;
-    const ELECTION_MARGIN_MAX_SCALE = 1.06;
-    const ELECTION_MARGIN_FULL_STRENGTH = 0.35;
-    const getAbsoluteElectionMarginScaleNum = margin => {
-        const normalizedMargin = Math.min(
-            ELECTION_MARGIN_FULL_STRENGTH,
-            Math.max(0, Number(margin) || 0)
-        ) / ELECTION_MARGIN_FULL_STRENGTH;
-        return ELECTION_MARGIN_MIN_SCALE
-            + (normalizedMargin * (ELECTION_MARGIN_MAX_SCALE - ELECTION_MARGIN_MIN_SCALE));
-    };
-    const createElectionMarginScale = margins => {
-        const validMargins = (Array.isArray(margins) ? margins : [])
-            .map(Number)
-            .filter(Number.isFinite);
-        if(config.useRelativeColourScale && validMargins.length > 1) {
-            const extent = d3.extent(validMargins);
-            if(extent[1] - extent[0] > 0.000001) {
-                return d3.scaleLinear(
-                    extent,
-                    [ELECTION_MARGIN_MIN_SCALE, ELECTION_MARGIN_MAX_SCALE]
-                ).clamp(true);
-            }
+    const ELECTION_MARGIN_SATURATION_RAMP = Object.freeze([
+        [0, 0.78],
+        [0.001, 0.80],
+        [0.005, 0.84],
+        [0.01, 0.87],
+        [0.03, 0.91],
+        [0.05, 0.94],
+        [0.10, 0.98],
+        [0.15, 0.99],
+        [0.20, 1],
+        [0.30, 1.02],
+        [0.45, 1.04],
+        [0.60, 1.06],
+        [0.75, 1.07],
+        [0.90, 1.08],
+        [1, 1.09]
+    ]);
+    const ELECTION_MARGIN_LIGHTNESS_RAMP = Object.freeze([
+        [0, 90],
+        [0.001, 84],
+        [0.005, 75],
+        [0.01, 73],
+        [0.03, 70],
+        [0.05, 66],
+        [0.10, 61],
+        [0.15, 57],
+        [0.20, 50],
+        [0.30, 44],
+        [0.45, 40],
+        [0.60, 37],
+        [0.75, 34],
+        [0.90, 30],
+        [1, 26]
+    ]);
+    const normalizeElectionMargin = margin => Math.min(
+        1,
+        Math.max(0, Math.abs(Number(margin) || 0))
+    );
+    const getElectionMarginRampValue = (margin, ramp) => {
+        const normalizedMargin = normalizeElectionMargin(margin);
+        for(let index = 1; index < ramp.length; index += 1) {
+            const [upperMargin, upperValue] = ramp[index];
+            if(normalizedMargin > upperMargin) continue;
+            const [lowerMargin, lowerValue] = ramp[index - 1];
+            const progress = upperMargin === lowerMargin
+                ? 1
+                : (normalizedMargin - lowerMargin) / (upperMargin - lowerMargin);
+            return lowerValue + ((upperValue - lowerValue) * progress);
         }
-        return getAbsoluteElectionMarginScaleNum;
+        return ramp[ramp.length - 1][1];
+    };
+    const getAbsoluteElectionMarginScaleNum = margin =>
+        getElectionMarginRampValue(margin, ELECTION_MARGIN_SATURATION_RAMP);
+    const getElectionMarginColour = (baseColour, margin) => {
+        const normalizedMargin = normalizeElectionMargin(margin);
+        const saturationScale = getAbsoluteElectionMarginScaleNum(normalizedMargin);
+        const hue = Number(baseColour?.h) || 0;
+        const baseSaturation = Math.min(100, Math.max(0, Number(baseColour?.s) || 0));
+        return {
+            h: hue,
+            s: Math.min(100, baseSaturation * saturationScale),
+            l: getElectionMarginRampValue(
+                normalizedMargin,
+                ELECTION_MARGIN_LIGHTNESS_RAMP
+            )
+        };
     };
     const getPrimaryPartySequencePatternId = (prefix, parties) => {
         return `${prefix}-${parties.map(normalizeHousePrimaryParty).join("-").toLowerCase()}`;
@@ -2774,7 +3322,10 @@
             );
             if(defs.querySelector(`[id="${patternId}"]`)) return;
             const colours = advancingCandidates.map(candidate =>
-                stringifyColour(getCandidateColourForRace(candidate, { cands: allCandidates }))
+                stringifyColour(getCandidateColourForRace(candidate, {
+                    cands: allCandidates,
+                    colourScope: `house-primary:${String(stateId || "").toLowerCase()}:${getHouseDistrictNumber(district, index)}:N`
+                }))
             );
             defs.appendChild(createCandidateColourPattern(patternId, colours));
         });
@@ -2858,7 +3409,7 @@
         };
     };
     const resetPresidentialPrimaryCountyView = () => {
-        if(!onCountyMap || lastMapElectionType !== "president") return;
+        if(lastMapElectionType !== "president") return;
         onCountyMap = false;
         activeMap = "US";
         activePrimaryCountyParty = null;
@@ -2878,10 +3429,22 @@
         }, 0);
     };
     const handlePresidentialPrimaryTabClick = event => {
-        const target = event.target instanceof Element
-            ? event.target.closest("#presElectDemPTab, #presElectRepPTab")
-            : null;
-        if(target) resetPresidentialPrimaryCountyView();
+        if(!(event.target instanceof Element)) return;
+        const target = event.target.closest(
+            "#presElectDemPTab, #presElectRepPTab, button, [role='tab'], input[type='button']"
+        );
+        if(!target) return;
+        const id = String(target.id || "");
+        const label = String(
+            target.innerText || target.textContent || target.getAttribute("value") || ""
+        ).trim().toLowerCase();
+        const isDemocraticTab = id === "presElectDemPTab"
+            || label === "democrats"
+            || label === "democratic primary";
+        const isRepublicanTab = id === "presElectRepPTab"
+            || label === "republicans"
+            || label === "republican primary";
+        if(isDemocraticTab || isRepublicanTab) resetPresidentialPrimaryCountyView();
     };
     const installPresidentialPrimaryTabReset = () => {
         if(presidentialPrimaryTabResetInstalled || typeof document === "undefined") return;
@@ -2923,6 +3486,110 @@
         document.getElementById("bm-primary-county-view-controls")?.remove();
         document.querySelectorAll(".bm-primary-county-map-host").forEach(host =>
             host.classList.remove("bm-primary-county-map-host"));
+    };
+    const removePresidentialPrimaryNationalControls = () => {
+        document.getElementById("bm-presidential-primary-national-controls")?.remove();
+        document.querySelectorAll(".bm-presidential-primary-national-map-host").forEach(host =>
+            host.classList.remove("bm-presidential-primary-national-map-host"));
+    };
+    const isPresidentialPrimaryNationalMap = (electionType, resultColours, live) => {
+        if(electionType !== "president" || onCountyMap) return false;
+        if(
+            document.getElementById("presElectDemPTab")
+            || document.getElementById("presElectRepPTab")
+            || isPrimaryElectionNightPage()
+        ) return true;
+        return Object.keys(resultColours || {}).some(stateId =>
+            isStatewidePrimaryRace(getStatewideRaceForMap(
+                electionType,
+                stateId,
+                { allowArchive: !live }
+            ))
+        );
+    };
+    const ensurePresidentialPrimaryNationalControls = (
+        svgMap,
+        resultColours,
+        electionType,
+        live,
+        projected
+    ) => {
+        removePresidentialPrimaryNationalControls();
+        if(!svgMap?.parentElement || !isPresidentialPrimaryNationalMap(electionType, resultColours, live)) {
+            return null;
+        }
+        const mapHost = svgMap.parentElement;
+        mapHost.classList.add("bm-presidential-primary-national-map-host");
+        const controls = document.createElement("div");
+        controls.id = "bm-presidential-primary-national-controls";
+        controls.classList.toggle("bm-presidential-primary-national-controls-page", !live);
+        const referenceButton = live
+            ? (document.getElementById("eNightProjectB")
+                || document.getElementById("presElectDemPTab")
+                || document.getElementById("presElectRepPTab"))
+            : null;
+        const referenceStyle = referenceButton ? getComputedStyle(referenceButton) : null;
+        const selectMode = nextMode => {
+            if(presidentialPrimaryNationalMapMode === nextMode) return;
+            playClick();
+            presidentialPrimaryNationalMapMode = nextMode;
+            hideMapTooltip();
+            controls.querySelectorAll("[data-presidential-primary-map-mode]").forEach(button => {
+                button.classList.toggle(
+                    "bm-presidential-primary-national-active",
+                    button.dataset.presidentialPrimaryMapMode === nextMode
+                );
+                button.setAttribute(
+                    "aria-pressed",
+                    button.dataset.presidentialPrimaryMapMode === nextMode ? "true" : "false"
+                );
+            });
+            updateMap(svgMap, resultColours, electionType, live, projected);
+        };
+        [
+            { mode: MAP_MODES.WINNER, label: "Winner" },
+            { mode: MAP_MODES.MARGIN, label: "Margin" }
+        ].forEach(({ mode, label }) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.dataset.presidentialPrimaryMapMode = mode;
+            button.textContent = label;
+            button.classList.toggle(
+                "bm-presidential-primary-national-active",
+                presidentialPrimaryNationalMapMode === mode
+            );
+            button.setAttribute(
+                "aria-pressed",
+                presidentialPrimaryNationalMapMode === mode ? "true" : "false"
+            );
+            if(referenceStyle) {
+                ["font", "padding", "border", "border-radius", "background", "color", "box-shadow"]
+                    .forEach(property => button.style.setProperty(
+                        property,
+                        referenceStyle.getPropertyValue(property)
+                    ));
+            }
+            button.onclick = event => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectMode(mode);
+            };
+            controls.appendChild(button);
+        });
+        mapHost.appendChild(controls);
+        const positionControls = () => {
+            if(!svgMap.isConnected || !controls.isConnected) return;
+            const hostBounds = mapHost.getBoundingClientRect();
+            const mapBounds = svgMap.getBoundingClientRect();
+            controls.style.top = `${mapBounds.top - hostBounds.top + 10}px`;
+            controls.style.left = `${Math.max(
+                mapBounds.left - hostBounds.left + 10,
+                mapBounds.right - hostBounds.left - controls.offsetWidth - 10
+            )}px`;
+        };
+        requestAnimationFrame(positionControls);
+        setTimeout(positionControls, 0);
+        return controls;
     };
     const ensurePrimaryCountyViewControls = (
         mapHost,
@@ -3049,23 +3716,75 @@
             const mapWidth = mapBounds.width || svgMap.clientWidth;
             const mapRight = mapLeft + mapWidth;
             const returnWidth = Math.ceil(returnButton?.getBoundingClientRect().width || 0);
+            const hasRcvControls = controls.classList.contains(
+                "bm-has-rcv-map-controls"
+            );
             if(returnWidth > 0) {
-                const hasRcvControls = controls.classList.contains(
-                    "bm-has-rcv-map-controls"
-                );
                 if(hasRcvControls) {
+                    const rcvColumnGap = 10;
+                    const rcvPrecinctButton = controls.querySelector(
+                        "#bm-precincts-rcv-button"
+                    );
+                    let rcvPrecinctWidth = returnWidth;
+                    if(rcvPrecinctButton) {
+                        const style = getComputedStyle(rcvPrecinctButton);
+                        const canvas = document.createElement("canvas");
+                        const canvasContext = canvas.getContext("2d");
+                        if(canvasContext) {
+                            canvasContext.font = style.font;
+                            const textWidth = canvasContext.measureText(
+                                rcvPrecinctButton.textContent?.trim() || ""
+                            ).width;
+                            const horizontalChrome = [
+                                "padding-left", "padding-right",
+                                "border-left-width", "border-right-width"
+                            ].reduce(
+                                (total, property) =>
+                                    total
+                                    + (
+                                        parseFloat(
+                                            style.getPropertyValue(property)
+                                        ) || 0
+                                    ),
+                                0
+                            );
+                            rcvPrecinctWidth = Math.ceil(
+                                textWidth + horizontalChrome + 4
+                            );
+                        }
+                    }
+                    const mainButtonWidth = Math.max(122, rcvPrecinctWidth);
                     controls.style.setProperty(
                         "--bm-rcv-main-button-width",
-                        `${returnWidth}px`
+                        `${mainButtonWidth}px`
                     );
                     controls.style.setProperty(
                         "--bm-rcv-half-button-width",
-                        `${Math.max(42, (returnWidth - 7) / 2)}px`
+                        `${
+                            Math.max(
+                                42,
+                                (returnWidth - rcvColumnGap) / 2
+                            )
+                        }px`
                     );
-                    controls.style.width = `${(returnWidth * 2) + 7}px`;
+                    controls.style.width = `${
+                        mainButtonWidth + returnWidth + rcvColumnGap
+                    }px`;
+                    controls.style.setProperty(
+                        "column-gap",
+                        `${rcvColumnGap}px`,
+                        "important"
+                    );
                     controls.querySelectorAll("button").forEach(button => {
-                        button.style.width = "100%";
-                        button.style.minWidth = "0";
+                        const isPrecinctColumnButton =
+                            button.id === "eNightPrecinctsB"
+                            || button.id === "bm-precincts-rcv-button";
+                        button.style.width = isPrecinctColumnButton
+                            ? `${mainButtonWidth}px`
+                            : "100%";
+                        button.style.minWidth = isPrecinctColumnButton
+                            ? `${mainButtonWidth}px`
+                            : "0";
                     });
                 } else {
                     controls.style.removeProperty("--bm-rcv-main-button-width");
@@ -3077,7 +3796,7 @@
                     });
                 }
             }
-            if(live === false) {
+            if(live === false && !hasRcvControls) {
                 const precinctButton = controls.querySelector("#eNightPrecinctsB");
                 const projectButton = controls.querySelector(
                     "[data-primary-county-view='projections']"
@@ -3308,13 +4027,7 @@
                     ? config.partyColours.I.default
                     : config.partyColours[normalizedParty]));
         if (!baseColour) return null;
-        const scaleNum = getAbsoluteElectionMarginScaleNum(winner.margin);
-        const inverseLightness = (100 - baseColour.l) * scaleNum;
-        return stringifyColour({
-            h: baseColour.h,
-            s: baseColour.s * scaleNum,
-            l: Math.max(100 - inverseLightness, 15)
-        });
+        return stringifyColour(getElectionMarginColour(baseColour, winner.margin));
     };
     const getStatewidePrimaryPartyCandidateColour = (stateId, race, live, party) => {
         const normalizedParty = normalizeHousePrimaryParty(party);
@@ -3325,39 +4038,37 @@
         const candidates = Array.isArray(group?.cands) ? group.cands : [];
         if(!candidates.length) return null;
         const stateElectData = getHouseStateElectionData(stateId);
-        const candidateRace = candidates
-            .map(candidate => ({
+        const candidateRace = candidates.map(candidate => {
+            const affiliation = getPrimaryCandidateAffiliation(candidate, normalizedParty);
+            return {
                 ...candidate,
-                party: normalizedParty,
+                party: affiliation.party,
+                caucus: affiliation.caucus,
+                caucusParty: affiliation.caucusParty,
                 visibleVotes: getPrimaryVisibleVotes(candidate, live, stateElectData)
-            }));
+            };
+        });
         const sortedCandidates = candidateRace
             .filter(candidate => candidate.visibleVotes > 0)
             .sort((candidateA, candidateB) => candidateB.visibleVotes - candidateA.visibleVotes);
         if(!sortedCandidates.length) return null;
         const winner = sortedCandidates[0];
-        const totalVotes = sortedCandidates.reduce(
+        const baseColour = getCandidateColourForRace(winner, {
+            cands: candidateRace,
+            colourScope: `presidential-primary:${String(stateId || "").toLowerCase()}:${normalizedParty}`
+        });
+        if(presidentialPrimaryNationalMapMode !== MAP_MODES.MARGIN) {
+            return stringifyColour(baseColour);
+        }
+        const totalVisibleVotes = sortedCandidates.reduce(
             (total, candidate) => total + candidate.visibleVotes,
             0
         );
-        const secondVotes = sortedCandidates[1]?.visibleVotes || 0;
-        const margin = totalVotes > 0
-            ? (winner.visibleVotes - secondVotes) / totalVotes
+        const runnerUpVotes = sortedCandidates[1]?.visibleVotes || 0;
+        const margin = totalVisibleVotes > 0
+            ? (winner.visibleVotes - runnerUpVotes) / totalVisibleVotes
             : 0;
-        const baseColour = getCandidateColourForRace(winner, {
-            cands: candidateRace,
-            colourScope: `presidential-primary:${normalizedParty}`
-        });
-        if(isPrimaryGroupComplete(group, live, stateElectData)) {
-            return stringifyColour(baseColour);
-        }
-        const scaleNum = getAbsoluteElectionMarginScaleNum(margin);
-        const inverseLightness = (100 - baseColour.l) * scaleNum;
-        return stringifyColour({
-            h: baseColour.h,
-            s: Math.min(100, baseColour.s * scaleNum),
-            l: Math.max(100 - inverseLightness, 15)
-        });
+        return stringifyColour(getElectionMarginColour(baseColour, margin));
     };
     const hasPrimaryGroupStarted = group => {
         const candidates = Array.isArray(group?.cands) ? group.cands : [];
@@ -3421,7 +4132,10 @@
             }));
         }
         const patternId = `bm-${electionType}-primary-candidates-${String(stateId).toLowerCase()}`;
-        ensureCandidateColourPattern(svgMap, patternId, advancingCandidates, { cands: candidates });
+        ensureCandidateColourPattern(svgMap, patternId, advancingCandidates, {
+            cands: candidates,
+            colourScope: `statewide-primary:${String(stateId || "").toLowerCase()}:N`
+        });
         return `url(#${patternId})`;
     };
     const getHouseStateElectionData = stateId => {
@@ -3560,13 +4274,7 @@
                     ? config.partyColours.I.default
                     : config.partyColours[normalizedParty]));
         if (!baseColour) return null;
-        const scaleNum = getAbsoluteElectionMarginScaleNum(winner.margin);
-        const inverseLightness = (100 - baseColour.l) * scaleNum;
-        return stringifyColour({
-            h: baseColour.h,
-            s: baseColour.s * scaleNum,
-            l: Math.max(100 - inverseLightness, 15)
-        });
+        return stringifyColour(getElectionMarginColour(baseColour, winner.margin));
     };
     const isHousePrimaryState = stateSummary => {
         return Array.isArray(stateSummary?.districts)
@@ -3585,13 +4293,7 @@
                     ? config.partyColours.I.default
                     : config.partyColours[normalizedParty]));
         if (!baseColour) return null;
-        const scaleNum = getAbsoluteElectionMarginScaleNum(winner.margin);
-        const inverseLightness = (100 - baseColour.l) * scaleNum;
-        return stringifyColour({
-            h: baseColour.h,
-            s: baseColour.s * scaleNum,
-            l: Math.max(100 - inverseLightness, 15)
-        });
+        return stringifyColour(getElectionMarginColour(baseColour, winner.margin));
     };
     const hasVisibleHousePrimaryStateVotes = (stateId, stateSummary, live) => {
         return Boolean(getHousePrimaryStateVoteWinner(stateId, stateSummary, live));
@@ -3867,7 +4569,8 @@
                     )})`;
                 }
                 return stringifyColour(getCandidateColourForRace(winner, {
-                    cands: candidatesWithVisibleVotes
+                    cands: candidatesWithVisibleVotes,
+                    colourScope: `house-primary:${String(stateId || "").toLowerCase()}:${districtNumber || getHouseDistrictNumber(district, 0)}:N`
                 }));
             }
             const projectedGroups = getHousePrimaryProjectedGroups(district);
@@ -3876,7 +4579,22 @@
                 .filter(group => Array.isArray(group?.cands) && group.cands.length > 0)
                 .length;
             if (live === true && partisanGroupCount > projectedGroups.length) return "url(#bm-house-primary-partial)";
-            return getHousePrimaryPartyColour(getCandidateVariantPartyKey(winner));
+            const partyVisibleVotes = {};
+            candidatesWithVisibleVotes.forEach(candidate => {
+                const party = normalizeHousePrimaryParty(candidate.party);
+                if (!party) return;
+                partyVisibleVotes[party] = (partyVisibleVotes[party] || 0)
+                    + (Number(candidate.visibleVotes) || 0);
+            });
+            const rankedParties = Object.entries(partyVisibleVotes)
+                .filter(([, partyVotes]) => partyVotes > 0)
+                .sort((partyA, partyB) => partyB[1] - partyA[1]);
+            if (rankedParties.length > 1 && rankedParties[0][1] === rankedParties[1][1]) {
+                return stringifyColour(config.partyColours.HouseTie);
+            }
+            const winningParty = rankedParties[0]?.[0]
+                || getCandidateVariantPartyKey(winner);
+            return getHousePrimaryPartyColour(winningParty);
         }
         if (!Array.isArray(district?.cands) || district.cands.length === 0) return "#b9b9b9";
         if (!shouldRevealHouseDistrictResults(district, live)) return "#b9b9b9";
@@ -3920,17 +4638,11 @@
             0
         );
         const margin = totalVotes > 0 ? Math.max(0, (visibleVotes - secondVotes) / totalVotes) : 0;
-        const scaleNum = getAbsoluteElectionMarginScaleNum(margin);
         const baseColour = getCandidateColourForRace(winner, district);
-        const inverseLightness = (100 - baseColour.l) * scaleNum;
-        return stringifyColour({
-            h: baseColour.h,
-            s: baseColour.s * scaleNum,
-            l: Math.max(100 - inverseLightness, 15)
-        });
+        return stringifyColour(getElectionMarginColour(baseColour, margin));
     };
     const getHouseDistrictGainPatternIds = (stateId, live) => {
-        return ["D", "R", "ID", "IR"].reduce((patternIds, party) => {
+        return ["D", "R", "ID", "IR", "I"].reduce((patternIds, party) => {
             patternIds[party] = `bm-house-district-${stateId}-${live ? "live" : "page"}-${party.toLowerCase()}-gain`;
             return patternIds;
         }, {});
@@ -4571,7 +5283,7 @@
         const defs = document.createElementNS(svgNamespace, "defs");
         const gainPatternIds = politicianMode ? {} : getHouseDistrictGainPatternIds(stateId, live);
         if(!politicianMode) {
-            ["D", "R", "ID", "IR"].forEach(party => {
+            ["D", "R", "ID", "IR", "I"].forEach(party => {
                 const pattern = createGainPattern(party);
                 const patternId = gainPatternIds[party];
                 pattern.setAttribute("id", patternId);
@@ -4840,13 +5552,14 @@
             stateId,
             race,
             rcvRace: rcvContext?.virtualRace || null,
-            isPrimary: isPrimaryElectionNightPage()
-                || isStatewidePrimaryRace(race)
+            isPrimary: isStatewidePrimaryRace(race)
+                || (live === true && isPrimaryElectionNightPage())
         });
     };
     let lastNativePrimaryPanelRefreshAt = 0;
     const nativePanelSelectedStateByElectionType = Object.create(null);
     const lastNativeSelectedPanelRefreshAtByElectionType = Object.create(null);
+    let nativePrimaryPanelSelectionTimer = null;
     const getNativeElectionNightUpdateFunction = electionType => {
         const functionNamesByType = {
             president: [
@@ -4905,6 +5618,85 @@
         const normalizedStateId = String(stateId || "").trim().toUpperCase();
         if(!normalizedStateId || normalizedStateId === "US") return;
         nativePanelSelectedStateByElectionType[electionType] = normalizedStateId;
+    };
+    const getLivePrimaryPanelStateIds = electionType => {
+        if(!["president", "usSenate", "governor"].includes(electionType)) return [];
+        const stateIds = [];
+        const addStateId = value => {
+            const rawValue = String(value || "").trim();
+            const cleanedValue = rawValue
+                .replace(/\b(?:presidential|democratic|republican|nonpartisan)?\s*primar(?:y|ies)\b.*$/i, "")
+                .trim();
+            const stateId = getElectionNightPanelStateCode(cleanedValue || rawValue);
+            if(
+                !stateId
+                || stateId === "US"
+                || !Executive?.data?.states?.[String(stateId).toLowerCase()]
+                || stateIds.includes(stateId)
+            ) return;
+            stateIds.push(stateId);
+        };
+        getLiveStatewideRaces(electionType).forEach(race => {
+            [
+                race?.state,
+                race?.stateCode,
+                race?.stateID,
+                race?.id,
+                race?.district,
+                race?.name
+            ].some(value => {
+                const previousLength = stateIds.length;
+                addStateId(value);
+                return stateIds.length > previousLength;
+            });
+        });
+        if(stateIds.length) return stateIds;
+        Object.keys(resultProxies[electionType] || {}).forEach(stateId => {
+            const race = getStatewideRaceForMap(electionType, stateId, { allowArchive: false });
+            if(hasLiveStatewidePrimaryRaceStarted(stateId, race)) addStateId(stateId);
+        });
+        return stateIds;
+    };
+    const syncNativePrimaryPanelSelection = (electionType, live) => {
+        if(
+            live !== true
+            || onCountyMap
+            || !isPrimaryElectionNightPage()
+            || !["president", "usSenate", "governor"].includes(electionType)
+        ) return;
+        const stateIds = getLivePrimaryPanelStateIds(electionType);
+        if(!stateIds.length) return;
+        const rememberedState = nativePanelSelectedStateByElectionType[electionType];
+        const targetState = stateIds.includes(rememberedState)
+            ? rememberedState
+            : stateIds[0];
+        rememberNativePanelSelectedState(electionType, targetState);
+        if(nativePrimaryPanelSelectionTimer) clearTimeout(nativePrimaryPanelSelectionTimer);
+        nativePrimaryPanelSelectionTimer = setTimeout(() => {
+            nativePrimaryPanelSelectionTimer = null;
+            if(
+                modShuttingDown
+                || onCountyMap
+                || lastMapElectionType !== electionType
+                || !isPrimaryElectionNightPage()
+            ) return;
+            const updateFunction = getNativeElectionNightUpdateFunction(electionType);
+            if(!updateFunction) return;
+            const previousActiveMap = activeMap;
+            const previousOnCountyMap = onCountyMap;
+            const previousLastMapElectionType = lastMapElectionType;
+            try {
+                activeMap = targetState;
+                onCountyMap = false;
+                lastNativePrimaryPanelRefreshAt = Date.now();
+                updateFunction();
+            } catch {}
+            finally {
+                activeMap = previousActiveMap;
+                onCountyMap = previousOnCountyMap;
+                lastMapElectionType = previousLastMapElectionType;
+            }
+        }, 0);
     };
     const refreshSelectedNativeStatePanel = (electionType, live) => {
         if(live !== true || onCountyMap) return;
@@ -5317,6 +6109,24 @@
         requestAnimationFrame(positionControls);
         setTimeout(positionControls, 0);
     };
+    const STATEWIDE_COUNTY_MAP_ELECTION_TYPES = Object.freeze(["president", "usSenate", "governor"]);
+    const isStatewideCountyMapElectionType = electionType =>
+        STATEWIDE_COUNTY_MAP_ELECTION_TYPES.includes(electionType);
+    const resolveCarriedPrimaryCountyParty = (electionType, stateId, live) => {
+        if(!isStatewideCountyMapElectionType(electionType)) return null;
+        const race = getStatewideRaceForMap(electionType, stateId, { allowArchive: !live });
+        if(!isStatewidePrimaryRace(race)) return null;
+        if(electionType === "president") {
+            const presidentialParty = getActivePresidentialPrimaryParty();
+            if(presidentialParty) return presidentialParty;
+        }
+        const allParties = getAvailablePrimaryParties(stateId, electionType);
+        const parties = live === true
+            ? allParties.filter(party => isPrimaryPartyStarted(stateId, party, electionType))
+            : allParties;
+        if(!parties.length) return null;
+        return parties.includes("D") ? "D" : parties[0];
+    };
     const renderMap = (canvasElem, resultColours, electionType, live, onClickPageFunc, projected) => {
         if(isHydratingMsnbcElectionData || !canvasElem?.parentElement) return;
         const container = canvasElem.parentElement;
@@ -5334,13 +6144,20 @@
             lastUpdateDataHook = null;
         }
         if(electionType !== lastMapElectionType) {
+            const keepCountyDrilldown = onCountyMap
+                && Boolean(activeMap)
+                && activeMap !== "US"
+                && isStatewideCountyMapElectionType(electionType)
+                && isStatewideCountyMapElectionType(lastMapElectionType);
             removeStateCountyZoom();
             if(!isHydratingMsnbcElectionData) {
                 precinctResultsController?.destroy();
             }
-            onCountyMap = false;
-            activePrimaryCountyParty = null;
-            activePrimaryCountyElectionType = null;
+            if(!keepCountyDrilldown) onCountyMap = false;
+            activePrimaryCountyParty = keepCountyDrilldown
+                ? resolveCarriedPrimaryCountyParty(electionType, activeMap, live)
+                : null;
+            activePrimaryCountyElectionType = activePrimaryCountyParty ? electionType : null;
             removePrimaryCountyPartyControls();
             if(statewideTurnoutMapMode !== electionType) statewideTurnoutMapMode = null;
             if(statewideShiftMapMode !== electionType) statewideShiftMapMode = null;
@@ -5477,11 +6294,11 @@
                     statePaths[i].setAttribute("id", stateId.toLowerCase() + "-state-path" + (live ? "-live" : ""));
                     statePaths[i].setAttribute("class", "better-maps-state-path");
                     statePaths[i].setAttribute("style", "fill: #cccccc;");
-                    if(onCountyMap && String(activeMap || "").toUpperCase() === "DC") {
+                    if(onCountyMap) {
                         statePaths[i].addEventListener("mouseenter", event => {
-                            const wardPath = event.currentTarget;
-                            if(wardPath?.parentNode?.lastElementChild !== wardPath) {
-                                wardPath.parentNode.appendChild(wardPath);
+                            const countyPath = event.currentTarget;
+                            if(countyPath?.parentNode?.lastElementChild !== countyPath) {
+                                countyPath.parentNode.appendChild(countyPath);
                             }
 
                             const cityLayer = svgMap.querySelector("#cities");
@@ -5542,7 +6359,7 @@
                                 }
                                 activePrimaryCountyParty = presidentialParty;
                                 activePrimaryCountyElectionType = electionType;
-                                activeCountyMapMode = MAP_MODES.MARGIN;
+                                activeCountyMapMode = MAP_MODES.WINNER;
                             }
                             const selectedRace = getStatewideRaceForMap(electionType, stateId, { allowArchive: !live });
                             if(
@@ -5581,13 +6398,15 @@
                                 activePrimaryCountyParty = presidentialParty
                                     || (parties.includes("D") ? "D" : parties[0]);
                                 activePrimaryCountyElectionType = electionType;
-                                activeCountyMapMode = MAP_MODES.MARGIN;
+                                activeCountyMapMode = MAP_MODES.WINNER;
                             } else {
                                 activePrimaryCountyParty = null;
                                 activePrimaryCountyElectionType = null;
                             }
                             if(["president", "usSenate", "governor"].includes(electionType)) {
-                                activeCountyMapMode = MAP_MODES.MARGIN;
+                                activeCountyMapMode = (activePrimaryCountyElectionType || activePrimaryCountyParty)
+                                    ? MAP_MODES.WINNER
+                                    : MAP_MODES.MARGIN;
                             }
                             playClick();
                             rememberNativePanelSelectedState(electionType, stateId);
@@ -5647,6 +6466,18 @@
                                 else removeStatewideTurnoutTooltip();
                                 return;
                             }
+                            if(isStatewideShiftModeSelected(electionType)) {
+                                event.preventDefault();
+                                event.stopImmediatePropagation();
+                                hideNativeMapTooltipForTurnout();
+                                const shiftDetails = statewideShiftDetailsByState.get(
+                                    String(stateId || "").toUpperCase()
+                                );
+                                if(shiftDetails) showStatewideShiftTooltip(event, shiftDetails);
+                                else removeStatewideShiftTooltip();
+                                return;
+                            }
+                            removeStatewideShiftTooltip();
                             tooltipComponents.properties.visible = true;
                             tooltipComponents.properties.targetDistrict = stateId.toLowerCase();
                             rememberMapTooltipPointer(
@@ -5673,7 +6504,10 @@
                             showRememberedMapTooltip();
                         });
                         statePaths[i].addEventListener("mouseleave", event => {
-                            if(isStatewideTurnoutModeSelected(electionType)) {
+                            if(
+                                isStatewideTurnoutModeSelected(electionType)
+                                || isStatewideShiftModeSelected(electionType)
+                            ) {
                                 clearStatewideTurnoutFloatingUi();
                                 return;
                             }
@@ -5720,6 +6554,13 @@
             electionType,
             live
         );
+        ensurePresidentialPrimaryNationalControls(
+            svgMap,
+            resultColours,
+            electionType,
+            live,
+            isProjected
+        );
         if(onCountyMap && svgMap?.parentElement) {
             const returnButton = countyReturnButton || document.getElementById(
                 projected ? "ePageReturnB2" : (live ? "eNightReturnB" : "ePageReturnB")
@@ -5753,6 +6594,7 @@
         syncStatewideTurnoutControls(svgMap, electionType, live, { onClickPageFunc });
         syncPrecinctResults(svgMap, electionType, live);
         renderHouseDistrictGrid(svgMap, canvasElem, resultColours, electionType, live, onClickPageFunc, projected);
+        syncNativePrimaryPanelSelection(electionType, live);
         if(live && electionType !== "usHousePol"){
             lastUpdateDataHook = Executive.functions.registerPostHook("electNightUpdateData", () => {
                 refreshNativePrimaryPanel(electionType, live);
@@ -5980,6 +6822,7 @@
     let msnbcSenateModelOffset = null;
     let msnbcLastSenateDataLogTime = 0;
     let msnbcInitialSenateChamberSnapshot = null;
+    const msnbcVoteOfficeRaceCache = new WeakMap();
     let houseBaseTabRefreshInProgress = false;
     let lastHouseBaseTabRefreshKey = "";
     const msnbcElectionRaceHydrationTimestamps = {};
@@ -5987,12 +6830,20 @@
         view: "hub",
         activeRace: "president",
         roadSubview: "map",
+        selectedVoteOffice: "house",
         selectedYear: null,
         selectedStateCode: null,
         selectedCountyName: null,
         comparisonCount: 0,
         hiddenHistoryYears: []
     };
+    const MSNBC_VOTE_BY_OFFICE_CATEGORIES = Object.freeze([
+        { key: "house", label: "House", liveVar: "electNightUSH", tabPattern: /^(?:U\.S\.\s*)?House$/i },
+        { key: "senate", label: "Senate", liveVar: "electNightUSS", tabPattern: /^(?:U\.S\.\s*)?Senate$/i },
+        { key: "governor", label: "Governor", liveVar: "electNightG", tabPattern: /^Governor$/i },
+        { key: "stateHouse", label: "State House", liveVar: "electNightStH", tabPattern: /^State House$/i, playerStateOnly: true },
+        { key: "stateSenate", label: "State Senate", liveVar: "electNightStS", tabPattern: /^State Senate$/i, playerStateOnly: true }
+    ]);
     const MSNBC_MAX_HISTORY_COMPARISONS = 4;
     const readRuntimeValue = (name) => {
         try {
@@ -6061,7 +6912,39 @@
         if(expected <= 0) return 0;
         return Math.max(0, Math.min(100, (counted / expected) * 100));
     };
-    const getRcvBooleanFlag = (sources, keyPattern) => {
+    const RCV_EXPLICIT_FLAG_PATTERN = /^(?:rankchoicevotelaw|(?:use|uses|enable|enables|enabled|has|is)?rankedchoice(?:voting)?(?:law|active|enabled|used)?|(?:use|uses|enable|enables|enabled|has|is)?rcv(?:law|active|enabled|used)?|(?:use|uses|enable|enables|enabled|has|is)?instantrunoff(?:voting)?(?:law|active|enabled|used)?|preferentialvoting(?:law|active|enabled|used)?)$/i;
+    const normalizeRcvFlagKey = value => String(value || "").replace(/[^a-z0-9]/gi, "");
+    const isEnabledRcvValue = value =>
+        value === true
+        || value === 1
+        || (typeof value === "string" && /^(?:true|yes|enabled|active|on|rcv|ranked)/i.test(value.trim()));
+    const readRcvPath = (root, path) => {
+        if(!root || typeof root !== "object") return undefined;
+        let current = root;
+        for(const part of String(path || "").split(".").filter(Boolean)) {
+            if(!current || !Object.prototype.hasOwnProperty.call(current, part)) return undefined;
+            current = current[part];
+        }
+        return current;
+    };
+    const isNationalRcvEnabled = () => {
+        const roots = [
+            Executive?.data?.nationStats,
+            Executive?.mods?.saveData?.nationStats,
+            readRuntimeValue("nationStats"),
+            Executive?.data?.advancedOptions,
+            Executive?.mods?.saveData?.advancedOptions,
+            readRuntimeValue("advancedOptions")
+        ];
+        const paths = [
+            "rankChoiceVoteLaw",
+            "rankedChoiceVoting",
+            "nationalRankChoiceVoteLaw",
+            "advancedOptions.rankChoiceVoteLaw"
+        ];
+        return roots.some(root => paths.some(path => isEnabledRcvValue(readRcvPath(root, path))));
+    };
+    const getRcvBooleanFlag = (sources, keyPattern = RCV_EXPLICIT_FLAG_PATTERN) => {
         const queue = (Array.isArray(sources) ? sources : [sources])
             .filter(source => source && typeof source === "object")
             .map(source => ({ source, depth: 0 }));
@@ -6071,13 +6954,10 @@
             if(visited.has(source)) continue;
             visited.add(source);
             for(const [key, value] of Object.entries(source)) {
-                const normalizedKey = String(key);
-                if(/noRcv|disableRcv|rcvDisabled/i.test(normalizedKey)) continue;
+                const normalizedKey = normalizeRcvFlagKey(key);
+                if(/^(?:norcv|disablercv|rcvdisabled)$/i.test(normalizedKey)) continue;
                 if(keyPattern.test(normalizedKey)) {
-                    if(value === true || value === 1) return true;
-                    if(typeof value === "string" && /^(?:true|yes|enabled|active|on|rcv|ranked)/i.test(value.trim())) {
-                        return true;
-                    }
+                    if(isEnabledRcvValue(value)) return true;
                 }
                 if(depth < 3 && value && typeof value === "object" && !Array.isArray(value)) {
                     queue.push({ source: value, depth: depth + 1 });
@@ -6088,26 +6968,26 @@
     };
     const isRcvResultsRace = (electionType, stateCode, race) => {
         if(electionType === "mayor") return false;
-        if(electionType !== "usSenate" && electionType !== "governor") return false;
+        if(!["usSenate", "usHouse", "governor"].includes(electionType)) return false;
         if(!race || !Array.isArray(race.cands) || race.cands.length < 2) return false;
         const normalizedStateCode = String(stateCode || race.state || "").toUpperCase();
         const state = Executive?.data?.states?.[normalizedStateCode.toLowerCase()];
+        if(isNationalRcvEnabled()) return true;
         if(getRcvBooleanFlag(
             [
                 race,
                 state,
                 state?.elections,
                 state?.electionOptions,
-                state?.options,
-                Executive?.data?.advOptions,
-                Executive?.data?.advancedOptions,
-                readRuntimeValue("advOptions"),
-                readRuntimeValue("advancedOptions"),
-                readRuntimeValue("electionSettings")
+                state?.options
             ],
-            /(?:ranked.*choice|choice.*ranked|instant.*runoff|preferential|\brcv\b)/i
+            RCV_EXPLICIT_FLAG_PATTERN
         )) return true;
-        if(Array.isArray(race.counties) && race.cands.length > 2) {
+        if(
+            getRcvRaceReporting(race, true) >= 99.999
+            && Array.isArray(race.counties)
+            && race.cands.length > 2
+        ) {
             const initialTotals = race.cands.map(() => 0);
             race.counties.forEach(county => {
                 const countyCandidates = Array.isArray(county?.cands) ? county.cands : [];
@@ -6121,7 +7001,7 @@
             });
             const transferEvidence = race.cands.some((candidate, index) =>
                 initialTotals[index] > 0
-                && getRcvCandidateVotes(candidate, race, true) === 0
+                && getRcvCandidateVotes(candidate, race, false) === 0
             );
             if(transferEvidence) return true;
         }
@@ -6536,6 +7416,117 @@
         const year = Number(getElectionNightPanelYear());
         return Number.isFinite(year) && year % 2 === 0;
     };
+    const getMsnbcVoteOfficeCategory = key => MSNBC_VOTE_BY_OFFICE_CATEGORIES.find(
+        category => category.key === key
+    ) || MSNBC_VOTE_BY_OFFICE_CATEGORIES[0];
+    const getMsnbcPlayerStateCode = () => {
+        const player = Executive?.data?.characters?.player;
+        const stateIndex = Executive?.enums?.characterArray?.candidate?.stateId;
+        const rawState = player?.stateId
+            ?? player?.state
+            ?? (Array.isArray(player) && Number.isInteger(stateIndex) ? player[stateIndex] : "");
+        const directCode = getElectionNightPanelStateCode(rawState);
+        if(directCode) return String(directCode).toUpperCase();
+        const nativeHeading = String(document.body?.innerText || "").match(
+            /\b([A-Za-z .'-]+?)\s+State\s+(?:House|Senate)\s+Elections\b/i
+        );
+        return nativeHeading ? String(getElectionNightPanelStateCode(nativeHeading[1]) || "").toUpperCase() : "";
+    };
+    const getMsnbcVoteOfficeRaceCandidates = race => {
+        if(Array.isArray(race?.cands)) return race.cands;
+        if(Array.isArray(race?.candidates)) return race.candidates;
+        return [];
+    };
+    const getMsnbcVoteOfficeRaces = category => {
+        const source = readRuntimeValue(category?.liveVar);
+        if(source && typeof source === "object") {
+            const cachedRaces = msnbcVoteOfficeRaceCache.get(source);
+            if(cachedRaces?.length) return cachedRaces;
+        }
+        const races = [];
+        const queue = Array.isArray(source) ? source.slice() : [source];
+        const visited = new Set();
+        while(queue.length) {
+            const node = queue.shift();
+            if(!node || typeof node !== "object" || visited.has(node)) continue;
+            visited.add(node);
+            if(getMsnbcVoteOfficeRaceCandidates(node).length > 0) {
+                races.push(node);
+                continue;
+            }
+            const collections = [
+                node.elections,
+                node.races,
+                node.districts,
+                node.states,
+                node.results,
+                node.stateHDistricts,
+                node.stateSDistricts
+            ];
+            let foundCollection = false;
+            collections.forEach(collection => {
+                if(!Array.isArray(collection)) return;
+                queue.push(...collection);
+                foundCollection = true;
+            });
+            if(!foundCollection) {
+                Object.values(node).forEach(value => {
+                    if(!value || typeof value !== "object") return;
+                    if(Array.isArray(value)) {
+                        queue.push(...value);
+                        return;
+                    }
+                    if(getMsnbcVoteOfficeRaceCandidates(value).length > 0
+                        || Array.isArray(value.elections)
+                        || Array.isArray(value.races)
+                        || Array.isArray(value.districts)) {
+                        queue.push(value);
+                    }
+                });
+            }
+        }
+        const scopedRaces = category?.playerStateOnly
+            ? races.filter(race => {
+                const playerStateCode = getMsnbcPlayerStateCode();
+                if(!playerStateCode) return true;
+                const raceStateValue = race?.state ?? race?.stateId ?? race?.stateID ?? race?.stateCode;
+                if(raceStateValue === undefined || raceStateValue === null || raceStateValue === "") return true;
+                const raceStateCode = getElectionNightPanelStateCode(raceStateValue);
+                return !raceStateCode || String(raceStateCode).toUpperCase() === playerStateCode;
+            })
+            : races;
+        if(scopedRaces.length && source && typeof source === "object") {
+            msnbcVoteOfficeRaceCache.set(source, scopedRaces);
+        }
+        return scopedRaces;
+    };
+    const getMsnbcElectionNightTabLabels = () => {
+        const tabHost = document.getElementById("electNightTabDiv");
+        if(!tabHost) return [];
+        return Array.from(tabHost.querySelectorAll("button"))
+            .filter(button => {
+                if(!button?.isConnected) return false;
+                try {
+                    const style = window.getComputedStyle(button);
+                    return style.display !== "none" && style.visibility !== "hidden";
+                } catch {
+                    return true;
+                }
+            })
+            .map(button => String(button.innerText || button.textContent || "").replace(/\s+/g, " ").trim())
+            .filter(Boolean);
+    };
+    const hasMsnbcVoteOfficeData = category => {
+        const tabLabels = getMsnbcElectionNightTabLabels();
+        if(tabLabels.length > 0 && category?.tabPattern instanceof RegExp) {
+            const hasElectionNightTab = tabLabels.some(label => category.tabPattern.test(label));
+            if(!hasElectionNightTab) return false;
+        }
+        return getMsnbcVoteOfficeRaces(category).length > 0;
+    };
+    const getMsnbcAvailableVoteOfficeCategories = () => isMsnbcPrimaryElectionContext()
+        ? []
+        : MSNBC_VOTE_BY_OFFICE_CATEGORIES.filter(hasMsnbcVoteOfficeData);
     const getMsnbcAvailableRaces = () => {
         const races = [];
         if(isMsnbcPresidentialElectionYear() && hasGeneralElectionNightRaceData("electNightP")) races.push("president");
@@ -6552,11 +7543,24 @@
             );
     };
     const getMsnbcAvailableSections = () => {
+        if(isMsnbcPrimaryElectionContext()) {
+            return {
+                president: false,
+                road270: false,
+                battlegroundPolls: false,
+                senateControl: false,
+                houseControl: false,
+                senateRace: false,
+                governorRace: false,
+                voteByOffice: false
+            };
+        }
         const availableRaces = getMsnbcAvailableRaces();
         const hasPresident = availableRaces.includes("president");
         const hasSenate = availableRaces.includes("senate");
         const hasGovernor = availableRaces.includes("governor");
         const hasHouse = hasMsnbcHouseElectionNightData();
+        const hasVoteByOffice = getMsnbcAvailableVoteOfficeCategories().length > 0;
         return {
             president: hasPresident,
             road270: hasPresident,
@@ -6564,7 +7568,8 @@
             senateControl: hasSenate,
             houseControl: hasHouse,
             senateRace: hasSenate,
-            governorRace: hasGovernor
+            governorRace: hasGovernor,
+            voteByOffice: hasVoteByOffice
         };
     };
     const hasAnyMsnbcElectionNightSection = () => {
@@ -6579,7 +7584,8 @@
             && !sections.battlegroundPolls
             && !sections.senateControl
             && !sections.houseControl
-            && !sections.senateRace;
+            && !sections.senateRace
+            && !sections.voteByOffice;
     };
     const getMsnbcFirstAvailableRace = () => {
         const availableRaces = getMsnbcAvailableRaces();
@@ -6599,6 +7605,7 @@
         return false;
     };
     const isMsnbcPanelViewAvailable = (view, race = msnbcElectionPanelState.activeRace) => {
+        if(isMsnbcPrimaryElectionContext()) return false;
         const sections = getMsnbcAvailableSections();
         if(view === "hub") return true;
         if(view === "road270") return sections.road270;
@@ -6606,6 +7613,7 @@
         if(view === "battlegroundPolls") return sections.battlegroundPolls;
         if(view === "senateControl") return sections.senateControl;
         if(view === "houseControl") return sections.houseControl;
+        if(view === "voteByOffice") return sections.voteByOffice;
         if(view === "race") return isMsnbcPanelRaceAvailable(race);
         return false;
     };
@@ -6847,20 +7855,44 @@
         if(/\b(Presidential Primaries|Primary Election|Democratic Primary|Republican Primary|Primary Results|Primar(?:y|ies))\b/i.test(text)) {
             return true;
         }
+        if(document.querySelector(
+            '[data-bm-primary-election="true"], '
+            + '#bm-presidential-primary-national-controls, '
+            + '#bm-primary-county-party-controls'
+        )) {
+            return true;
+        }
         if(/\bGeneral Election\b/i.test(text)) {
             return false;
         }
-        const presidentialNight = readRuntimeValue("electNightP");
-        if(Array.isArray(presidentialNight?.elections)
-            && presidentialNight.elections.length > 0
-            && presidentialNight.elections[0]?.cands === undefined) {
-            return true;
-        }
-        return false;
+        return hasPrimaryElectionNightRaceData();
+    };
+    const hasPrimaryElectionNightRaceData = () => {
+        const hasPrimaryCandidateGroup = race => !Array.isArray(race?.cands)
+            && [race?.dem, race?.rep, race?.allCands].some(group => (
+                Array.isArray(group?.cands) && group.cands.length > 0
+            ));
+        return ["electNightP", "electNightUSH", "electNightUSS", "electNightG"]
+            .some(liveVarName => {
+                const electionNight = readRuntimeValue(liveVarName);
+                return Array.isArray(electionNight?.elections)
+                    && electionNight.elections.some(hasPrimaryCandidateGroup);
+            });
+    };
+    const isMsnbcPrimaryElectionContext = () => {
+        if(isPrimaryElectionNightPage()) return true;
+        const text = String(document.body?.innerText || "");
+        const hasElectionNightUi = text.includes("Skip to End") && Boolean(
+            document.getElementById("electNightDiv")
+            || document.getElementById("electNightTabDiv")
+            || document.getElementById("electNightCanvas")
+            || document.getElementById("electNightMainDiv")
+        );
+        return hasElectionNightUi && hasPrimaryElectionNightRaceData();
     };
     const isElectionNightPanelAvailable = () => {
         if(document.querySelector(".bm-special-election-night")) return false;
-        if(isPrimaryElectionNightPage()) return false;
+        if(isMsnbcPrimaryElectionContext()) return false;
         if(!hasAnyMsnbcElectionNightSection()) return false;
         const text = String(document.body?.innerText || "");
         const hasElectionNightUi = text.includes("Skip to End")
@@ -6904,6 +7936,128 @@
                 && speedValue !== null
                 && Number(speedValue) === 0
             );
+    };
+    const ELECTION_NIGHT_THEME_STORAGE_KEY = "better-maps-nbc-election-night-music";
+    const readElectionNightThemeEnabled = () => {
+        try {
+            const storedValue = globalThis.localStorage?.getItem(
+                ELECTION_NIGHT_THEME_STORAGE_KEY
+            );
+            if(storedValue === null || storedValue === undefined) return true;
+            return storedValue !== "off" && storedValue !== "false" && storedValue !== "0";
+        } catch {
+            return electionNightThemeEnabled;
+        }
+    };
+    const isElectionNightThemeOptionElementVisible = element => {
+        if(!element?.isConnected) return false;
+        try {
+            const style = getComputedStyle(element);
+            if(style.display === "none" || style.visibility === "hidden") return false;
+        } catch {}
+        return typeof element.getClientRects !== "function"
+            || element.getClientRects().length > 0;
+    };
+    const isElectionNightThemeOptionsOpen = () => Boolean(
+        isElectionNightThemeOptionElementVisible(
+            document.getElementById("bm-election-night-theme-option")
+        )
+        || Array.from(document.querySelectorAll("h1, h2, h3, h4, label, div"))
+            .some(element => isElectionNightThemeOptionElementVisible(element)
+                && /^Music Volume:?$/i.test(
+                String(element.textContent || "").replace(/\s+/g, " ").trim()
+            ))
+    );
+    const updateElectionNightThemeOptionButtons = () => {
+        document.querySelectorAll("[data-bm-election-night-theme]").forEach(button => {
+            const selected = (button.dataset.bmElectionNightTheme === "on")
+                === electionNightThemeEnabled;
+            button.classList.toggle("bm-election-night-theme-selected", selected);
+            button.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+    };
+    const setElectionNightThemeEnabled = enabled => {
+        electionNightThemeEnabled = enabled === true;
+        try {
+            globalThis.localStorage?.setItem(
+                ELECTION_NIGHT_THEME_STORAGE_KEY,
+                electionNightThemeEnabled ? "on" : "off"
+            );
+        } catch {}
+        updateElectionNightThemeOptionButtons();
+        if(!electionNightThemeEnabled) {
+            pauseElectionNightTheme();
+            return;
+        }
+        syncElectionNightTheme();
+    };
+    const findElectionNightThemeOptionHeading = pattern =>
+        Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, label, div, p"))
+            .find(element => isElectionNightThemeOptionElementVisible(element)
+                && pattern.test(
+                String(element.textContent || "").replace(/\s+/g, " ").trim()
+            )) || null;
+    const getStandaloneOptionsSection = (heading, followingHeading) => {
+        if(!heading || !followingHeading) return null;
+        let section = heading;
+        while(
+            section.parentElement
+            && !section.parentElement.contains(followingHeading)
+        ) {
+            section = section.parentElement;
+        }
+        return section === heading ? heading.parentElement : section;
+    };
+    const ensureElectionNightThemeOptionControl = () => {
+        const existing = document.getElementById("bm-election-night-theme-option");
+        if(existing) {
+            updateElectionNightThemeOptionButtons();
+            return existing;
+        }
+        const musicHeading = findElectionNightThemeOptionHeading(/^Music Volume:?$/i);
+        const soundHeading = findElectionNightThemeOptionHeading(/^Sound Volume:?$/i);
+        if(!musicHeading || !soundHeading) return null;
+        const musicSection = getStandaloneOptionsSection(musicHeading, soundHeading);
+        if(!musicSection?.parentElement) return null;
+
+        const section = document.createElement(
+            /^(DIV|SECTION|ARTICLE)$/i.test(musicSection.tagName)
+                ? musicSection.tagName.toLowerCase()
+                : "div"
+        );
+        section.id = "bm-election-night-theme-option";
+        section.className = `${musicSection.className || ""} bm-election-night-theme-option`.trim();
+        section.style.cssText = musicSection.style.cssText || "";
+        section.style.removeProperty("height");
+        section.style.removeProperty("min-height");
+
+        const title = musicHeading.cloneNode(false);
+        title.removeAttribute("id");
+        title.textContent = "NBC Election Night Music:";
+        title.classList.add("bm-election-night-theme-title");
+        section.appendChild(title);
+
+        const controls = document.createElement("div");
+        controls.className = "bm-election-night-theme-buttons";
+        [
+            ["on", "On", true],
+            ["off", "Off", false]
+        ].forEach(([value, label, enabled]) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.dataset.bmElectionNightTheme = value;
+            button.textContent = label;
+            button.addEventListener("click", event => {
+                event.preventDefault();
+                event.stopPropagation();
+                setElectionNightThemeEnabled(enabled);
+            });
+            controls.appendChild(button);
+        });
+        section.appendChild(controls);
+        musicSection.insertAdjacentElement("afterend", section);
+        updateElectionNightThemeOptionButtons();
+        return section;
     };
     const getElectionNightThemeSource = () => {
         const soundPath = path.join(
@@ -6951,17 +8105,34 @@
         }
     };
     const syncElectionNightTheme = () => {
+        ensureElectionNightThemeOptionControl();
         const screenOpen = isElectionNightScreenOpen();
-        if(!screenOpen) {
+        const optionsOpen = isElectionNightThemeOptionsOpen();
+        if(screenOpen) {
+            electionNightThemeSessionActive = true;
+            electionNightThemeLastScreenSeenAt = Date.now();
+        }
+        const optionsOpenedFromElectionNight = optionsOpen
+            && electionNightThemeSessionActive;
+        if(!screenOpen && !optionsOpenedFromElectionNight) {
             if(electionNightThemeLastScreenSeenAt > 0
                 && Date.now() - electionNightThemeLastScreenSeenAt < 2000) {
                 return;
             }
             pauseElectionNightTheme({ reset: true });
+            const pageText = String(document.body?.innerText || "");
+            if(/\bMain Menu\b/i.test(pageText)
+                || (/\bOffice\b/i.test(pageText) && /\bCampaign\b/i.test(pageText))) {
+                electionNightThemeSessionActive = false;
+                electionNightThemeLastScreenSeenAt = 0;
+            }
             return;
         }
-        electionNightThemeLastScreenSeenAt = Date.now();
-        if(isElectionNightPlaybackPaused()) {
+        if(!electionNightThemeEnabled) {
+            pauseElectionNightTheme();
+            return;
+        }
+        if(!optionsOpenedFromElectionNight && isElectionNightPlaybackPaused()) {
             pauseElectionNightTheme();
             return;
         }
@@ -6991,6 +8162,8 @@
     };
     const installElectionNightTheme = () => {
         if(modShuttingDown || electionNightThemeMonitor || typeof Audio !== "function") return;
+        electionNightThemeEnabled = readElectionNightThemeEnabled();
+        ensureElectionNightThemeOptionControl();
         electionNightThemeMonitor = setInterval(() => {
             if(!modShuttingDown) syncElectionNightTheme();
         }, 350);
@@ -7253,8 +8426,8 @@
             .bm-msnbc-candidate-row.no-results {
                 grid-template-columns: 1fr;
             }
-            .bm-msnbc-candidate-row.D .bm-msnbc-name-block { background: #1388d8; }
-            .bm-msnbc-candidate-row.R .bm-msnbc-name-block { background: #de3329; }
+            .bm-msnbc-candidate-row.D .bm-msnbc-name-block { background: #0487E6; }
+            .bm-msnbc-candidate-row.R .bm-msnbc-name-block { background: #DD2929; }
             .bm-msnbc-candidate-row.I .bm-msnbc-name-block { background: #777; }
             .bm-msnbc-name-block {
                 position: relative;
@@ -7509,15 +8682,15 @@
                 color: #fff;
                 border-top-color: rgba(255,255,255,0.22);
             }
-            .bm-msnbc-history-row.winner.D { background: #1388d8; }
-            .bm-msnbc-history-row.winner.R { background: #de3329; }
+            .bm-msnbc-history-row.winner.D { background: #0487E6; }
+            .bm-msnbc-history-row.winner.R { background: #DD2929; }
             .bm-msnbc-history-row.winner.I { background: #777; }
             .bm-msnbc-history-row.winner .bm-msnbc-history-votes {
                 color: rgba(255,255,255,0.88);
                 border-top-color: rgba(255,255,255,0.34);
             }
-            .bm-msnbc-history-row.D { color: #026eb6; }
-            .bm-msnbc-history-row.R { color: #cc0000; }
+            .bm-msnbc-history-row.D { color: #0487E6; }
+            .bm-msnbc-history-row.R { color: #DD2929; }
             .bm-msnbc-history-row.I { color: #666666; }
             .bm-msnbc-history-row.winner.D,
             .bm-msnbc-history-row.winner.R,
@@ -7580,7 +8753,8 @@
             }
             .bm-msnbc-body.hub,
             .bm-msnbc-body.road,
-            .bm-msnbc-body.board {
+            .bm-msnbc-body.board,
+            .bm-msnbc-body.vote-office {
                 display: block;
                 overflow: hidden;
                 background: #e2e8ea;
@@ -7594,7 +8768,7 @@
             .bm-msnbc-hub-grid {
                 height: 100%;
                 display: grid;
-                grid-template-columns: 1.08fr 0.88fr 1.34fr 0.92fr 0.92fr;
+                grid-template-columns: 1fr 1fr 1.18fr 0.9fr 0.9fr;
                 grid-template-rows: 1fr 1fr;
                 gap: 10px;
             }
@@ -7637,7 +8811,7 @@
                 grid-column: span 2;
             }
             .bm-msnbc-hub-tile.wide {
-                grid-column: span 3;
+                grid-column: span 2;
             }
             .bm-msnbc-hub-tile.compact-title {
                 padding-left: 14px;
@@ -7659,6 +8833,9 @@
                 max-width: 100%;
                 font-size: 24px;
                 line-height: 1.03;
+            }
+            .bm-msnbc-hub-tile.stacked-title .bm-msnbc-hub-tile-title {
+                white-space: pre-line;
             }
             .bm-msnbc-hub-tile.main .bm-msnbc-hub-tile-title,
             .bm-msnbc-hub-tile.large .bm-msnbc-hub-tile-title,
@@ -7697,13 +8874,168 @@
             .bm-msnbc-hub-bars span {
                 display: block;
                 width: 19px;
-                background: #1388d8;
+                background: #0487E6;
             }
-            .bm-msnbc-hub-bars span:nth-child(2n) { background: #de3329; }
+            .bm-msnbc-hub-bars span:nth-child(2n) { background: #DD2929; }
             .bm-msnbc-hub-bars span:nth-child(1) { height: 44px; }
             .bm-msnbc-hub-bars span:nth-child(2) { height: 68px; }
             .bm-msnbc-hub-bars span:nth-child(3) { height: 54px; }
             .bm-msnbc-hub-bars span:nth-child(4) { height: 82px; }
+            .bm-msnbc-vote-office {
+                box-sizing: border-box;
+                height: 100%;
+                display: grid;
+                grid-template-rows: auto minmax(0, 1fr);
+                padding: 22px 32px 30px;
+                color: #101820;
+                background: #dfe6e8;
+            }
+            .bm-msnbc-vote-office-toolbar {
+                display: flex;
+                align-items: flex-end;
+                justify-content: space-between;
+                gap: 28px;
+                padding: 0 0 16px;
+                border-bottom: 5px solid #172536;
+            }
+            .bm-msnbc-vote-office-heading {
+                font-size: 31px;
+                line-height: 0.95;
+                font-weight: 900;
+                text-transform: uppercase;
+            }
+            .bm-msnbc-vote-office-heading small {
+                display: block;
+                margin-top: 9px;
+                color: #53646e;
+                font-size: 14px;
+                line-height: 1;
+                font-weight: 900;
+            }
+            .bm-msnbc-vote-office-select-wrap {
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+                min-width: 230px;
+                color: #53646e;
+                font-size: 12px;
+                line-height: 1;
+                font-weight: 900;
+                text-transform: uppercase;
+            }
+            .bm-msnbc-vote-office-select {
+                width: 100%;
+                border: 2px solid #172536;
+                border-radius: 0;
+                padding: 8px 34px 8px 10px;
+                color: #101820;
+                background: #f4f7f8;
+                font-size: 18px;
+                line-height: 1;
+                font-weight: 900;
+                text-transform: uppercase;
+                cursor: pointer;
+            }
+            .bm-msnbc-vote-office-content {
+                min-height: 0;
+                display: grid;
+                grid-template-columns: minmax(390px, 0.9fr) minmax(470px, 1.1fr);
+                align-items: center;
+                gap: 58px;
+                padding: 28px 26px 16px;
+            }
+            .bm-msnbc-vote-office-name {
+                margin-bottom: 16px;
+                color: #172536;
+                font-size: 52px;
+                line-height: 1;
+                font-weight: 900;
+                text-transform: uppercase;
+            }
+            .bm-msnbc-vote-office-rows {
+                border-top: 1px solid #aeb9be;
+            }
+            .bm-msnbc-vote-office-row {
+                display: grid;
+                grid-template-columns: 130px minmax(150px, 1fr) 92px;
+                align-items: baseline;
+                gap: 18px;
+                padding: 15px 0 13px;
+                border-bottom: 1px solid #aeb9be;
+            }
+            .bm-msnbc-vote-office-party {
+                font-size: 25px;
+                line-height: 1;
+                font-weight: 900;
+            }
+            .bm-msnbc-vote-office-row.D .bm-msnbc-vote-office-party,
+            .bm-msnbc-vote-office-row.D .bm-msnbc-vote-office-pct { color: #0487E6; }
+            .bm-msnbc-vote-office-row.R .bm-msnbc-vote-office-party,
+            .bm-msnbc-vote-office-row.R .bm-msnbc-vote-office-pct { color: #DD2929; }
+            .bm-msnbc-vote-office-row.I .bm-msnbc-vote-office-party,
+            .bm-msnbc-vote-office-row.I .bm-msnbc-vote-office-pct { color: #686f73; }
+            .bm-msnbc-vote-office-votes {
+                font-size: 28px;
+                line-height: 1;
+                font-weight: 700;
+                text-align: right;
+            }
+            .bm-msnbc-vote-office-pct {
+                font-size: 29px;
+                line-height: 1;
+                font-weight: 900;
+                text-align: right;
+            }
+            .bm-msnbc-vote-office-visual {
+                min-width: 0;
+            }
+            .bm-msnbc-vote-office-margin {
+                margin-bottom: 18px;
+                color: #172536;
+                font-size: 54px;
+                line-height: 1;
+                font-weight: 900;
+                text-align: center;
+                text-transform: uppercase;
+            }
+            .bm-msnbc-vote-office-margin.D { color: #0487E6; }
+            .bm-msnbc-vote-office-margin.R { color: #DD2929; }
+            .bm-msnbc-vote-office-margin.tie { color: #686f73; }
+            .bm-msnbc-vote-office-bar {
+                height: 62px;
+                display: flex;
+                overflow: hidden;
+                border: 4px solid #172536;
+                background: #c8d0d4;
+            }
+            .bm-msnbc-vote-office-segment {
+                height: 100%;
+                min-width: 0;
+            }
+            .bm-msnbc-vote-office-segment.D { background: #0487E6; }
+            .bm-msnbc-vote-office-segment.R { background: #DD2929; }
+            .bm-msnbc-vote-office-segment.I { background: #777777; }
+            .bm-msnbc-vote-office-legend {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+                margin-top: 11px;
+                color: #53646e;
+                font-size: 15px;
+                line-height: 1;
+                font-weight: 900;
+                text-align: center;
+                text-transform: uppercase;
+            }
+            .bm-msnbc-vote-office-empty {
+                grid-column: 1 / -1;
+                align-self: center;
+                color: #53646e;
+                font-size: 25px;
+                font-weight: 900;
+                text-align: center;
+                text-transform: uppercase;
+            }
             .bm-msnbc-road-layout {
                 height: 100%;
                 display: grid;
@@ -7799,8 +9131,8 @@
                 object-position: center bottom;
                 image-rendering: auto;
             }
-            .bm-msnbc-road-head.D .bm-msnbc-road-portrait { background: #1388d8; }
-            .bm-msnbc-road-head.R .bm-msnbc-road-portrait { background: #de3329; }
+            .bm-msnbc-road-head.D .bm-msnbc-road-portrait { background: #0487E6; }
+            .bm-msnbc-road-head.R .bm-msnbc-road-portrait { background: #DD2929; }
             .bm-msnbc-road-head.I .bm-msnbc-road-portrait { background: #777; }
             .bm-msnbc-road-name-strip {
                 display: grid;
@@ -7825,8 +9157,8 @@
             .bm-msnbc-road-name:last-child {
                 border-right: 0;
             }
-            .bm-msnbc-road-name.D { background: #1388d8; }
-            .bm-msnbc-road-name.R { background: #de3329; }
+            .bm-msnbc-road-name.D { background: #0487E6; }
+            .bm-msnbc-road-name.R { background: #DD2929; }
             .bm-msnbc-road-name.I { background: #777; }
             .bm-msnbc-road-score-row {
                 position: relative;
@@ -7867,11 +9199,11 @@
                 opacity: 0.96;
                 transition: height 180ms ease-out;
             }
-            .bm-msnbc-road-fill.D { background: #1388d8; }
-            .bm-msnbc-road-fill.R { background: #de3329; }
+            .bm-msnbc-road-fill.D { background: #0487E6; }
+            .bm-msnbc-road-fill.R { background: #DD2929; }
             .bm-msnbc-road-fill.I { background: #777; }
-            .bm-msnbc-road-candidate.D .bm-msnbc-road-fill { background: #1388d8; }
-            .bm-msnbc-road-candidate.R .bm-msnbc-road-fill { background: #de3329; }
+            .bm-msnbc-road-candidate.D .bm-msnbc-road-fill { background: #0487E6; }
+            .bm-msnbc-road-candidate.R .bm-msnbc-road-fill { background: #DD2929; }
             .bm-msnbc-road-candidate.I .bm-msnbc-road-fill { background: #777; }
             .bm-msnbc-road-270-line {
                 position: absolute;
@@ -8011,8 +9343,8 @@
                 justify-content: center;
                 text-align: center;
             }
-            .bm-msnbc-bg-leader.D { background: #1388d8; }
-            .bm-msnbc-bg-leader.R { background: #de3329; }
+            .bm-msnbc-bg-leader.D { background: #0487E6; }
+            .bm-msnbc-bg-leader.R { background: #DD2929; }
             .bm-msnbc-bg-leader.I { background: #777; }
             .bm-msnbc-bg-leader.tie { background: #777; }
             .bm-msnbc-bg-leader.pending { background: #777; }
@@ -8088,8 +9420,8 @@
                 text-transform: uppercase;
                 box-shadow: 0 8px 16px rgba(25,32,40,0.18);
             }
-            .bm-msnbc-senate-party-bar.D { background: #1388d8; }
-            .bm-msnbc-senate-party-bar.R { background: #de3329; }
+            .bm-msnbc-senate-party-bar.D { background: #0487E6; }
+            .bm-msnbc-senate-party-bar.R { background: #DD2929; }
             .bm-msnbc-senate-party-letter {
                 font-size: 38px;
                 padding: 0 18px;
@@ -8117,8 +9449,8 @@
                 margin-left: 12px;
                 margin-right: 6px;
             }
-            .bm-msnbc-senate-party-bar.D .bm-msnbc-senate-party-count { color: #1388d8; }
-            .bm-msnbc-senate-party-bar.R .bm-msnbc-senate-party-count { color: #de3329; }
+            .bm-msnbc-senate-party-bar.D .bm-msnbc-senate-party-count { color: #0487E6; }
+            .bm-msnbc-senate-party-bar.R .bm-msnbc-senate-party-count { color: #DD2929; }
             .bm-msnbc-senate-separator {
                 display: none;
             }
@@ -8160,8 +9492,8 @@
                 text-transform: uppercase;
                 box-shadow: 0 5px 12px rgba(25,32,40,0.18);
             }
-            .bm-msnbc-senate-control-call.D { background: #1388d8; }
-            .bm-msnbc-senate-control-call.R { background: #de3329; }
+            .bm-msnbc-senate-control-call.D { background: #0487E6; }
+            .bm-msnbc-senate-control-call.R { background: #DD2929; }
             .bm-msnbc-senate-arc {
                 position: relative;
                 flex: 0 0 440px;
@@ -8302,8 +9634,8 @@
             .bm-msnbc-poll-table th {
                 font-weight: 900;
             }
-            .bm-msnbc-poll-table .party-D { color: #026eb6; }
-            .bm-msnbc-poll-table .party-R { color: #cc0000; }
+            .bm-msnbc-poll-table .party-D { color: #0487E6; }
+            .bm-msnbc-poll-table .party-R { color: #DD2929; }
             .bm-msnbc-poll-table .party-I { color: #555555; }
         `;
         document.head.appendChild(style);
@@ -8380,7 +9712,9 @@
         const finalVotes = Number(candidate?.votes ?? candidate?.totVotes) || 0;
         const updates = Array.isArray(candidate?.updates) ? candidate.updates : [];
         if(options.source !== "official" && finalVotes > 0 && updates.length) {
-            const stateCode = getMarginThroughNightStateCodeFromRace(stateRace) || getMsnbcElectionStateCode(stateRace);
+            const stateCode = options.stateCode
+                || getMarginThroughNightStateCodeFromRace(stateRace)
+                || getMsnbcElectionStateCode(stateRace);
             const stateElectData = getMsnbcStateElectData(stateCode);
             const updateIndex = Number(stateElectData?.indx ?? stateRace?.indx);
             if(Number.isFinite(updateIndex) && updateIndex > 0) {
@@ -8979,6 +10313,23 @@
         if(sideParty === "R" || sideParty === "IR") return "right";
         return "";
     };
+    const getChanceCandidateMajorParty = candidate => {
+        const normalizeMajorParty = value => {
+            const party = String(value || "").trim().toUpperCase();
+            if(party === "D" || party === "DEM" || party.startsWith("DEMOCRAT")) return "D";
+            if(party === "R" || party === "REP" || party.startsWith("REPUBLICAN")) return "R";
+            return "";
+        };
+        const sideParty = String(candidate?.sideParty || "").trim();
+        if(sideParty) {
+            return normalizeMajorParty(sideParty);
+        }
+        const variantParty = String(getCandidateVariantPartyKey(candidate) || "").trim();
+        if(variantParty) {
+            return normalizeMajorParty(variantParty);
+        }
+        return normalizeMajorParty(candidate?.party);
+    };
     const chanceCandidateIdeologyCache = new Map();
     const chanceMeterVisualValues = new Map();
     const getChanceIdeologyLabelScore = (value, dimension = "") => {
@@ -9046,6 +10397,13 @@
         return ideology;
     };
     const orderChanceCandidatePair = (candidateA, candidateB) => {
+        const majorPartyA = getChanceCandidateMajorParty(candidateA);
+        const majorPartyB = getChanceCandidateMajorParty(candidateB);
+        if(majorPartyA && majorPartyB && majorPartyA !== majorPartyB) {
+            return majorPartyA === "D"
+                ? { leftCandidate: candidateA, rightCandidate: candidateB }
+                : { leftCandidate: candidateB, rightCandidate: candidateA };
+        }
         const scoreA = Number.isFinite(Number(candidateA?.ideology))
             ? Number(candidateA.ideology)
             : getChanceCandidateIdeology(candidateA, candidateA?.party);
@@ -9229,7 +10587,7 @@
             if(!source || typeof source !== "object" || visited.has(source)) continue;
             visited.add(source);
             for(const [key, value] of Object.entries(source)) {
-                if(keyPattern.test(String(key))) {
+                if(keyPattern.test(normalizeRcvFlagKey(key))) {
                     if(value === true || value === 1) return true;
                     if(typeof value === "string" && /^(?:true|yes|enabled|active|rcv|ranked)/i.test(value.trim())) return true;
                 }
@@ -9243,9 +10601,10 @@
     const isChanceRankedChoiceRace = (stateRace, stateCode) => {
         const normalizedStateCode = String(stateCode || "").toUpperCase();
         const stateData = Executive?.data?.states?.[normalizedStateCode.toLowerCase()];
+        if(isNationalRcvEnabled()) return true;
         const explicit = getChanceBooleanFlag(
             [stateRace, stateData],
-            /(?:ranked.*choice|choice.*ranked|instant.*runoff|preferential|\brcv\b)/i
+            RCV_EXPLICIT_FLAG_PATTERN
         );
         if(explicit) return true;
         return (normalizedStateCode === "ME" || normalizedStateCode === "AK")
@@ -9622,7 +10981,17 @@
         const outerRadius = 184;
         const innerRadius = 86;
         const needleLength = outerRadius - 52;
-        const visualKey = String(point?.key || `${point?.stateCode || "state"}|chance`);
+        const getVisualCandidateIdentity = candidate => String(
+            candidate?.id
+            ?? candidate?.candidateIndex
+            ?? candidate?.name
+            ?? "candidate"
+        ).trim().toLowerCase();
+        const visualKey = [
+            point?.key || `${point?.stateCode || "state"}|chance`,
+            getVisualCandidateIdentity(data.leftCandidate),
+            getVisualCandidateIdentity(data.rightCandidate)
+        ].join("|");
         const rawTargetMeterValue = Number(data.meterValue);
         const rawTargetProbability = Number(data.probability);
         const targetMeterValue = Math.max(0, Math.min(
@@ -9669,6 +11038,9 @@
             startedAt: visualNow,
             duration: transitionDuration
         });
+        if(chanceMeterVisualValues.size > 160) {
+            chanceMeterVisualValues.delete(chanceMeterVisualValues.keys().next().value);
+        }
         const leaderColour = data.leader.colour || "#888888";
         const mixGaugeColour = (colour, strength) => {
             try {
@@ -10323,6 +11695,12 @@
                 "electNightUSHUpdate", "electNightUSHouseUpdate", "electNightHouseUpdate"
             ];
         }
+        if(race === "stateHouse") {
+            return ["eNightStHUpdate", "electNightStHUpdate"];
+        }
+        if(race === "stateSenate") {
+            return ["eNightStSUpdate", "electNightStSUpdate"];
+        }
         if(race === "senate") {
             return [
                 "eNightUSSUpdate", "eNightSenateUpdate", "electNightUSSUpdate", "electNightSenateUpdate"
@@ -10343,6 +11721,12 @@
                 "eNightUSHProjectW", "eNightUSHouseProjectW", "eNightHouseProjectW",
                 "electNightUSHProjectW", "electNightUSHouseProjectW", "electNightHouseProjectW"
             ];
+        }
+        if(race === "stateHouse") {
+            return ["eNightStHProjectW", "electNightStHProjectW"];
+        }
+        if(race === "stateSenate") {
+            return ["eNightStSProjectW", "electNightStSProjectW"];
         }
         if(race === "senate") {
             return [
@@ -10395,7 +11779,12 @@
         dummyElem.getContext = () => dummyContext;
         try {
             isHydratingMsnbcElectionData = true;
-            if(typeof activeMap !== "undefined") activeMap = "US";
+            if(typeof activeMap !== "undefined") {
+                const usesPlayerState = race === "stateHouse" || race === "stateSenate";
+                activeMap = usesPlayerState
+                    ? (getMsnbcPlayerStateCode() || previousActiveMap || "US")
+                    : "US";
+            }
             document.getElementById = () => dummyElem;
             projectionFunctions.forEach(projectionFunction => {
                 try { projectionFunction(); } catch {}
@@ -10426,8 +11815,14 @@
     };
     const getMsnbcBackgroundHydrationRaces = () => {
         const availableRaces = getMsnbcAvailableRaces();
-        return ["house", "senate", "president", "governor"]
-            .filter(race => race === "house" ? hasMsnbcHouseElectionNightData() : availableRaces.includes(race));
+        const availableVoteOfficeKeys = new Set(
+            getMsnbcAvailableVoteOfficeCategories().map(category => category.key)
+        );
+        return ["house", "senate", "president", "governor", "stateHouse", "stateSenate"]
+            .filter(race => {
+                if(race === "president") return availableRaces.includes(race);
+                return availableVoteOfficeKeys.has(race);
+            });
     };
     const hydrateMsnbcElectionDataStaggered = (force = false) => {
         const races = getMsnbcBackgroundHydrationRaces();
@@ -10535,6 +11930,7 @@
             party: normalizePanelPartyCode(candidate.party || candidate.caucus || candidate.caucusParty),
             votes: getPanelCurrentCandidateVotes(candidate, sourceRace, { source: "official" }),
             id: candidate.id ?? null,
+            sourceCandidate: candidate,
             incumbent: isMsnbcCandidateIncumbent(candidate)
         }));
         const totalVotes = candidates.reduce((sum, candidate) => sum + (Number(candidate.votes) || 0), 0);
@@ -10551,25 +11947,51 @@
             reportedPct
         };
     };
+    const getMsnbcArchivedCandidateColourParty = candidate => {
+        const rawParty = candidate?.party?.name
+            || candidate?.party?.id
+            || candidate?.party
+            || candidate?.partyKey
+            || candidate?.extendedAttribs?.party
+            || candidate?.extendedAttribs?.partyKey
+            || "";
+        const compactParty = String(rawParty).replace(/[^A-Za-z]/g, "").toUpperCase();
+        if([
+            "ID", "INDD", "INDDEM", "INDEPENDENTD", "INDEPENDENTDEM",
+            "INDEPENDENTDEMOCRAT", "INDEPENDENTDEMOCRATS"
+        ].includes(compactParty)) return "ID";
+        if([
+            "IR", "INDR", "INDREP", "INDEPENDENTR", "INDEPENDENTREP",
+            "INDEPENDENTREPUBLICAN", "INDEPENDENTREPUBLICANS"
+        ].includes(compactParty)) return "IR";
+        return getStatewideShiftCandidateParty(candidate);
+    };
     const buildArchivePanelEntry = (archiveEntry, raceConfig) => {
         const sourceStates = raceConfig.race === "president"
             ? (archiveEntry?.exitPoll?.states || [])
             : (archiveEntry?.elections || []);
         if(!Array.isArray(sourceStates) || sourceStates.length === 0) return null;
         const states = sourceStates.map(state => {
-            const candidates = (state.candidates || state.cands || []).map(candidate => ({
-                name: String(candidate.name || "Unknown"),
-                party: normalizePanelPartyCode(candidate.party || candidate.caucus || candidate.caucusParty),
-                votes: Number(candidate.totVotes ?? candidate.votes) || 0,
-                id: candidate.id ?? null,
-                incumbent: isMsnbcCandidateIncumbent(candidate)
-            }));
+            const candidates = (state.candidates || state.cands || []).map(candidate => {
+                const colourParty = getMsnbcArchivedCandidateColourParty(candidate);
+                return {
+                    name: String(candidate.name || "Unknown"),
+                    party: normalizePanelPartyCode(candidate.party || candidate.caucus || candidate.caucusParty),
+                    colourParty,
+                    sourceCandidate: candidate,
+                    votes: Number(candidate.totVotes ?? candidate.votes) || 0,
+                    id: candidate.id ?? null,
+                    incumbent: isMsnbcCandidateIncumbent(candidate)
+                };
+            });
             const stateCode = raceConfig.race === "president"
                 ? getElectionNightPanelStateCode(state.name)
                 : getElectionNightPanelStateCode(state.state || state.district || state.name);
             return {
                 name: getElectionNightPanelStateName(stateCode),
                 code: stateCode,
+                year: Number(archiveEntry.year),
+                race: raceConfig.race,
                 totalVotes: Number(state.totVotes ?? state.totalVotes) || candidates.reduce((sum, candidate) => sum + candidate.votes, 0),
                 candidates
             };
@@ -10737,13 +12159,41 @@
         const selectedYear = Number(msnbcElectionPanelState.selectedYear);
         return entries.find(entry => Number(entry.year) === selectedYear) || entries[0];
     };
+    const getMsnbcArchivedColourCandidate = candidate => {
+        const sourceCandidate = candidate?.sourceCandidate || candidate;
+        const colourParty = candidate?.colourParty || getMsnbcArchivedCandidateColourParty(sourceCandidate);
+        return {
+            ...sourceCandidate,
+            party: colourParty || sourceCandidate?.party,
+            votes: Number(candidate?.votes ?? sourceCandidate?.totVotes ?? sourceCandidate?.votes) || 0
+        };
+    };
+    const getMsnbcCandidateColour = (candidate, scope, fallback = "#777777") => {
+        if(!candidate) return fallback;
+        const sourceRace = scope?.sourceRace;
+        const sourceCandidate = sourceRace
+            ? (candidate.sourceCandidate || candidate)
+            : getMsnbcArchivedColourCandidate(candidate);
+        const colourRace = sourceRace && Array.isArray(sourceRace.cands)
+            ? sourceRace
+            : {
+                cands: (scope?.candidates || []).map(getMsnbcArchivedColourCandidate),
+                projected: scope?.projected === true,
+                colourScope: `msnbc:${scope?.year || "current"}:${scope?.race || "race"}:${scope?.code || scope?.name || "national"}`
+            };
+        try {
+            return stringifyColour(getCandidateColourForRace(sourceCandidate, colourRace));
+        } catch {
+            return fallback;
+        }
+    };
     const getMsnbcMapFill = (state) => {
         if(!state || Number(state.totalVotes) <= 0) return "#71818e";
         const winner = state?.candidates?.slice().sort((a, b) => b.votes - a.votes)[0];
         const party = normalizePanelPartyCode(winner?.party);
-        if(party === "D") return "#026eb6";
-        if(party === "R") return "#cc0000";
-        if(party === "I") return "#777777";
+        if(party === "D") return getMsnbcCandidateColour(winner, state, "#0487E6");
+        if(party === "R") return getMsnbcCandidateColour(winner, state, "#DD2929");
+        if(party === "I") return getMsnbcCandidateColour(winner, state, "#777777");
         return "#71818e";
     };
     const findMsnbcCountyEntry = (countyEntries, countyName) => {
@@ -10853,8 +12303,8 @@
     };
     const getMsnbcPartyFill = (party) => {
         const normalizedParty = normalizePanelPartyCode(party);
-        if(normalizedParty === "D") return "#026eb6";
-        if(normalizedParty === "R") return "#cc0000";
+        if(normalizedParty === "D") return "#0487E6";
+        if(normalizedParty === "R") return "#DD2929";
         if(normalizedParty === "I") return "#777777";
         return "#71818e";
     };
@@ -10881,17 +12331,20 @@
             .sort((a, b) => Number(b.electoralVotes) - Number(a.electoralVotes))
             .slice(0, 3);
     };
-    const getMsnbcRoadElectoralTotal = (entry) => {
-        const directTotals = getMsnbcDirectRoadTotals(entry);
-        const directTotal = (directTotals || []).reduce((sum, candidate) =>
-            sum + (Number(candidate?.electoralVotes) || 0), 0
+    const getMsnbcConfiguredElectoralTotal = () => {
+        return Object.values(Executive?.data?.states || {}).reduce((sum, state) =>
+            sum + (Number(state?.electoralNum ?? state?.electoralVotes ?? state?.electors ?? state?.ev) || 0),
+            0
         );
-        if(directTotal >= 500 && directTotal <= 600) return directTotal;
-        const total = (entry?.states || []).reduce((sum, state) =>
+    };
+    const getMsnbcRoadElectoralTotal = (entry) => {
+        const configuredTotal = getMsnbcConfiguredElectoralTotal();
+        if(configuredTotal > 0) return configuredTotal;
+        const entryTotal = (entry?.states || []).reduce((sum, state) =>
             sum + getElectionNightPanelStateElectoralVotes(state.code),
             0
         );
-        return total > 0 ? total : 538;
+        return entryTotal > 0 ? entryTotal : 538;
     };
     const getMsnbcRoadNeededVotes = (entry) => {
         const total = getMsnbcRoadElectoralTotal(entry);
@@ -11428,7 +12881,8 @@
             roadBattlegrounds: "Uncalled Battleground States",
             battlegroundPolls: "Battlegrounds + Polls",
             senateControl: "Senate",
-            houseControl: "House"
+            houseControl: "House",
+            voteByOffice: "Vote By Office"
         };
         const raceLabels = {
             president: "Presidential States",
@@ -11459,7 +12913,8 @@
             { title: "Senate", sub: "Control board", mark: "S", view: "senateControl", enabled: sections.senateControl },
             { title: "House", sub: "Control board", mark: "H", view: "houseControl", enabled: sections.houseControl },
             { title: "Senate By State", sub: "State races", mark: "ST", view: "race", race: "senate", enabled: sections.senateRace },
-            { title: "Governor By State", sub: "State races", mark: "G", view: "race", race: "governor", enabled: sections.governorRace, className: "compact-title" },
+            { title: "Governor By State", sub: "State races", mark: "G", view: "race", race: "governor", enabled: sections.governorRace },
+            { title: "Vote By\nOffice", sub: "Total votes and vote share", mark: "VO", view: "voteByOffice", enabled: sections.voteByOffice, className: "stacked-title" },
             { title: "Battlegrounds + Polls", sub: "Latest weekly averages", mark: "BG", view: "battlegroundPolls", enabled: sections.battlegroundPolls, className: "wide" }
         ].filter(tile => tile.enabled);
         body.innerHTML = `
@@ -11483,6 +12938,148 @@
                 if(tile.disabled) return;
                 openMsnbcView(panel, tile.dataset.view || "hub", tile.dataset.race || null);
             });
+        });
+    };
+    const getMsnbcVoteOfficeCandidateVotes = (candidate, race, category) => {
+        const candidates = getMsnbcVoteOfficeRaceCandidates(race);
+        const getCurrentVotes = raceCandidate => Number(
+            raceCandidate?.currentVotes
+            ?? raceCandidate?.currVotes
+            ?? raceCandidate?.countedVotes
+        );
+        const updateVotes = getPanelCurrentCandidateVotes(candidate, race, {
+            stateCode: category?.playerStateOnly ? getMsnbcPlayerStateCode() : ""
+        });
+        const hasVisibleVotes = (Number(race?.totalCurrVotes ?? race?.currentVotes) || 0) > 0
+            || candidates.some(raceCandidate => (getCurrentVotes(raceCandidate) || 0) > 0);
+        if(hasVisibleVotes || (Number.isFinite(updateVotes) && updateVotes > 0)) {
+            const currentVotes = getCurrentVotes(candidate);
+            const officialVotes = Number.isFinite(currentVotes) && currentVotes >= 0 ? currentVotes : 0;
+            const sequencedVotes = Number.isFinite(updateVotes) && updateVotes >= 0 ? updateVotes : 0;
+            return Math.max(officialVotes, sequencedVotes);
+        }
+        const expectedVotes = Number(race?.totalVotes) || 0;
+        const reportedVotes = Number(race?.totalCurrVotes) || 0;
+        if(expectedVotes > 0 && reportedVotes >= expectedVotes) {
+            return Math.max(0, Number(candidate?.votes ?? candidate?.totVotes) || 0);
+        }
+        return 0;
+    };
+    const getMsnbcVoteOfficePartyGroup = candidate => {
+        const rawParty = String(
+            candidate?.party
+            || candidate?.extendedAttribs?.party
+            || candidate?.affiliation
+            || candidate?.caucusParty
+            || candidate?.caucus
+            || (Array.isArray(candidate) ? candidate[0] : "")
+            || ""
+        ).trim();
+        const compactParty = rawParty.replace(/[^A-Za-z]/g, "").toUpperCase();
+        if(/independent/i.test(rawParty)
+            || ["I", "ID", "IR", "IND", "INDD", "INDR", "INDDEM", "INDREP"].includes(compactParty)) {
+            return "I";
+        }
+        const party = normalizePanelPartyCode(rawParty);
+        return party === "D" || party === "R" ? party : "I";
+    };
+    const getMsnbcVoteOfficeTotals = category => {
+        const totals = { D: 0, R: 0, I: 0 };
+        getMsnbcVoteOfficeRaces(category).forEach(race => {
+            getMsnbcVoteOfficeRaceCandidates(race).forEach(candidate => {
+                const group = getMsnbcVoteOfficePartyGroup(candidate);
+                totals[group] += getMsnbcVoteOfficeCandidateVotes(candidate, race, category);
+            });
+        });
+        totals.total = totals.D + totals.R + totals.I;
+        return totals;
+    };
+    const renderMsnbcVoteByOffice = panel => {
+        const body = setMsnbcBodyMode(panel, "vote-office");
+        if(!body) return;
+        const availableCategories = getMsnbcAvailableVoteOfficeCategories();
+        if(!availableCategories.length) {
+            body.innerHTML = `<div class="bm-msnbc-empty">No vote-by-office results are available for this election night.</div>`;
+            return;
+        }
+        const availableKeys = new Set(availableCategories.map(category => category.key));
+        if(!availableKeys.has(msnbcElectionPanelState.selectedVoteOffice)) {
+            msnbcElectionPanelState.selectedVoteOffice = availableCategories[0]?.key || "house";
+        }
+        const category = getMsnbcVoteOfficeCategory(msnbcElectionPanelState.selectedVoteOffice);
+        hydrateMsnbcElectionRaceData(category.key);
+        const totals = getMsnbcVoteOfficeTotals(category);
+        const percentages = {
+            D: totals.total > 0 ? (totals.D / totals.total) * 100 : 0,
+            R: totals.total > 0 ? (totals.R / totals.total) * 100 : 0,
+            I: totals.total > 0 ? (totals.I / totals.total) * 100 : 0
+        };
+        const marginValue = totals.total > 0
+            ? (Math.abs(totals.D - totals.R) / totals.total) * 100
+            : 0;
+        const marginParty = totals.D === totals.R ? "tie" : (totals.D > totals.R ? "D" : "R");
+        const marginText = marginParty === "tie" ? "Tie" : `${marginParty} +${marginValue.toFixed(1)}`;
+        const rows = [
+            { party: "D", label: "DEM", votes: totals.D, percentage: percentages.D },
+            { party: "R", label: "GOP", votes: totals.R, percentage: percentages.R },
+            { party: "I", label: "IND/OTHER", votes: totals.I, percentage: percentages.I }
+        ].sort((rowA, rowB) => {
+            const voteDifference = rowB.votes - rowA.votes;
+            if(voteDifference !== 0) return voteDifference;
+            return ["D", "R", "I"].indexOf(rowA.party) - ["D", "R", "I"].indexOf(rowB.party);
+        });
+        body.innerHTML = `
+            <div class="bm-msnbc-vote-office">
+                <div class="bm-msnbc-vote-office-toolbar">
+                    <div class="bm-msnbc-vote-office-heading">
+                        Vote By Office
+                        <small>Total votes and vote share</small>
+                    </div>
+                    <label class="bm-msnbc-vote-office-select-wrap">
+                        Office
+                        <select class="bm-msnbc-vote-office-select" id="bm-msnbc-vote-office-select">
+                            ${availableCategories.map(option => `
+                                <option value="${escapeHtml(option.key)}"
+                                    ${option.key === category.key ? "selected" : ""}>
+                                    ${escapeHtml(option.label)}
+                                </option>
+                            `).join("")}
+                        </select>
+                    </label>
+                </div>
+                <div class="bm-msnbc-vote-office-content">
+                    <div class="bm-msnbc-vote-office-table">
+                        <div class="bm-msnbc-vote-office-name">${escapeHtml(category.label)}</div>
+                        <div class="bm-msnbc-vote-office-rows">
+                            ${rows.map(row => `
+                                <div class="bm-msnbc-vote-office-row ${row.party}">
+                                    <div class="bm-msnbc-vote-office-party">${escapeHtml(row.label)}</div>
+                                    <div class="bm-msnbc-vote-office-votes">${formatWholeNumber(row.votes)}</div>
+                                    <div class="bm-msnbc-vote-office-pct">${row.percentage.toFixed(1)}%</div>
+                                </div>
+                            `).join("")}
+                        </div>
+                    </div>
+                    <div class="bm-msnbc-vote-office-visual">
+                        <div class="bm-msnbc-vote-office-margin ${marginParty}">${escapeHtml(marginText)}</div>
+                        <div class="bm-msnbc-vote-office-bar" aria-label="${escapeHtml(category.label)} vote share">
+                            ${rows.map(row => `
+                                <div class="bm-msnbc-vote-office-segment ${row.party}"
+                                    style="width: ${row.percentage.toFixed(6)}%;"></div>
+                            `).join("")}
+                        </div>
+                        <div class="bm-msnbc-vote-office-legend">
+                            ${rows.map(row => `<span>${escapeHtml(row.label)} ${row.percentage.toFixed(1)}%</span>`).join("")}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        body.querySelector("#bm-msnbc-vote-office-select")?.addEventListener("change", event => {
+            const nextCategory = getMsnbcVoteOfficeCategory(event.currentTarget.value);
+            if(!availableKeys.has(nextCategory.key)) return;
+            msnbcElectionPanelState.selectedVoteOffice = nextCategory.key;
+            renderMsnbcVoteByOffice(panel);
         });
     };
     const renderMsnbcRoadTo270 = (panel) => {
@@ -13073,6 +14670,7 @@
             && ["president", "senate", "governor"].includes(raceConfig.race);
         const candidateRows = topCandidates.map((candidate, index) => {
             const party = normalizePanelPartyCode(candidate.party) || "I";
+            const candidateColour = getMsnbcCandidateColour(candidate, displayScope);
             const pct = displayTotalVotes > 0 ? ((candidate.votes / displayTotalVotes) * 100).toFixed(1) : "0.0";
             const displayCandidateName = `${getPanelCandidateName(candidate)}${candidate.incumbent ? "*" : ""}`;
             const projectedWinnerMark = index === 0 && hasVisibleResults && showProjectedWinnerMark
@@ -13085,7 +14683,7 @@
                 : "";
             return `
                 <div class="bm-msnbc-candidate-row ${party}${hasVisibleResults ? "" : " no-results"}">
-                    <div class="bm-msnbc-name-block" data-full-name="${escapeHtml(displayCandidateName)}" title="${escapeHtml(displayCandidateName)}">
+                    <div class="bm-msnbc-name-block" style="background: ${escapeHtml(candidateColour)}" data-full-name="${escapeHtml(displayCandidateName)}" title="${escapeHtml(displayCandidateName)}">
                         ${projectedWinnerMark}
                         <div class="bm-msnbc-name-line">
                             <span class="bm-msnbc-candidate-name">${escapeHtml(displayCandidateName)}</span>
@@ -13252,6 +14850,10 @@
             renderMsnbcHouseControl(panel);
             return;
         }
+        if(msnbcElectionPanelState.view === "voteByOffice") {
+            renderMsnbcVoteByOffice(panel);
+            return;
+        }
         msnbcElectionPanelState.view = "race";
         hydrateMsnbcElectionRaceData(msnbcElectionPanelState.activeRace);
         renderMsnbcRaceContent(panel, msnbcElectionPanelState.activeRace);
@@ -13314,6 +14916,7 @@
                 stopMsnbcElectionPanelHydration();
                 return;
             }
+            if(document.activeElement?.id === "bm-msnbc-vote-office-select") return;
             renderMsnbcPanelContent(panel);
         }, 1500);
     };
@@ -13496,8 +15099,20 @@
     const updateMsnbcElectionButtonVisibility = () => {
         const button = document.getElementById("bm-msnbc-election-btn");
         if(!button) return;
-        const visible = isElectionNightPanelAvailable();
+        const primaryElection = isMsnbcPrimaryElectionContext();
+        const visible = !primaryElection && isElectionNightPanelAvailable();
         button.style.display = visible ? "block" : "none";
+        button.disabled = !visible;
+        button.setAttribute("aria-hidden", visible ? "false" : "true");
+
+        if(primaryElection) {
+            document.getElementById("bm-msnbc-election-overlay")?.remove();
+            if(msnbcElectionPanelRefreshTimer) {
+                clearInterval(msnbcElectionPanelRefreshTimer);
+                msnbcElectionPanelRefreshTimer = null;
+            }
+            stopMsnbcElectionPanelHydration();
+        }
 
         const nextText = `Election Night ${getElectionNightPanelYear() || ""}`.trim();
         if(button.textContent !== nextText) button.textContent = nextText;
@@ -13520,6 +15135,7 @@
             const button = document.createElement("button");
             button.id = "bm-msnbc-election-btn";
             button.textContent = "Election Night";
+            button.style.display = "none";
             button.addEventListener("click", openMsnbcElectionPanel);
             document.body.appendChild(button);
         }
@@ -13541,30 +15157,62 @@
             globalThis.bmMsnbcElectionPanelError = error;
         }
     };
+    const roundPollDisplayValue = (value) => {
+        const number = Number(value);
+        if(!Number.isFinite(number)) return null;
+        return Math.round((number + Number.EPSILON) * 10) / 10;
+    };
+    const formatPollDisplayValue = (value) => {
+        const rounded = roundPollDisplayValue(value);
+        if(rounded === null) return "";
+        return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    };
+    const formatPollPercentageValue = (value) => `${formatPollDisplayValue(value)}%`;
+    const formatPollAveragePercentageValue = (value) => {
+        const rounded = roundPollDisplayValue(value);
+        return `${(rounded ?? 0).toFixed(1)}%`;
+    };
+    const getValidPollSample = (poll) => {
+        const rawSample = poll?.sample ?? poll?.respondents ?? poll?.sampleSize;
+        if(typeof rawSample === "number"){
+            return Number.isFinite(rawSample) && rawSample > 0 ? rawSample : null;
+        }
+        const normalized = String(rawSample ?? "").trim().replace(/,/g, "");
+        if(!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+        const sample = Number(normalized);
+        return Number.isFinite(sample) && sample > 0 ? sample : null;
+    };
     const formatPollPercentageText = (text) => {
         return String(text || "").replace(/(\d+(?:\.\d+)?)%/g, (_match, value) => {
             const number = Number(value);
-            return Number.isFinite(number) ? Math.round(number).toString() + "%" : value + "%";
+            return Number.isFinite(number) ? formatPollPercentageValue(number) : value + "%";
         });
     };
     const formatPollLeaderText = (text) => {
         return String(text || "").replace(/([+-])\s*(\d+(?:\.\d+)?)/g, (_match, sign, value) => {
             const number = Number(value);
-            return Number.isFinite(number) ? sign + Math.round(number).toString() : sign + value;
+            return Number.isFinite(number) ? sign + formatPollDisplayValue(number) : sign + value;
         });
     };
     const formatPollLeaderCell = (cell) => {
-        const leaderText = String(cell?.textContent || "");
+        const currentText = String(cell?.textContent || "");
+        if(!cell.dataset.bmPollRawLeader || currentText !== cell.dataset.bmPollFormattedLeader){
+            cell.dataset.bmPollRawLeader = currentText;
+        }
+        const leaderText = cell.dataset.bmPollRawLeader;
         const marginMatch = leaderText.match(/([+-])\s*(\d+(?:\.\d+)?)/);
         if(marginMatch){
             const margin = Number(marginMatch[2]);
-            if(Number.isFinite(margin) && Math.round(margin) === 0){
+            if(Number.isFinite(margin) && margin <= 0){
                 cell.textContent = "Tie";
                 cell.style.color = "black";
+                cell.dataset.bmPollFormattedLeader = "Tie";
                 return;
             }
         }
-        formatTextNodes(cell, formatPollLeaderText);
+        const formattedText = formatPollLeaderText(leaderText);
+        if(currentText !== formattedText) cell.textContent = formattedText;
+        cell.dataset.bmPollFormattedLeader = formattedText;
     };
     const formatTextNodes = (element, formatter) => {
         if(!element) return;
@@ -13581,16 +15229,20 @@
         });
     };
     const formatIndependentPollDecimals = () => {
+        updateWeightedPollAverageRows();
         const pollTables = document.querySelectorAll("table.indPollTitleTbl, table.indPollTitleTbl2");
         pollTables.forEach(table => {
             const headerCells = Array.from(table.querySelectorAll("tr:first-child th"));
             if(headerCells.length === 0) return;
             const headers = headerCells.map(cell => String(cell.textContent || "").trim());
+            const electionIndex = headers.findIndex(header => header === "Election");
             const resultsIndex = headers.findIndex(header => header === "Results");
             const leaderIndex = headers.findIndex(header => header === "Leader");
             if(resultsIndex === -1 && leaderIndex === -1) return;
             Array.from(table.rows).slice(1).forEach(row => {
-                if(resultsIndex !== -1 && row.cells[resultsIndex]){
+                const isAverageRow = electionIndex !== -1
+                    && String(row.cells[electionIndex]?.textContent || "").trim().toUpperCase() === "AVERAGE";
+                if(!isAverageRow && resultsIndex !== -1 && row.cells[resultsIndex]){
                     formatTextNodes(row.cells[resultsIndex], formatPollPercentageText);
                 }
                 if(leaderIndex !== -1 && row.cells[leaderIndex]){
@@ -13606,17 +15258,21 @@
     }
     const queueIndependentPollDecimalFormatting = () => {
         if(!hasIndependentPollSurface()) return;
-        if(independentPollFormatQueued) return;
+        if(independentPollFormatTimer) clearTimeout(independentPollFormatTimer);
         independentPollFormatQueued = true;
-        setTimeout(() => {
+        independentPollFormatTimer = setTimeout(() => {
+            independentPollFormatTimer = null;
             independentPollFormatQueued = false;
             if(!hasIndependentPollSurface()) return;
             pollAveragePointCenterCache = new WeakMap();
             pollAverageRawPointCenterCache = new WeakMap();
+            pollAverageWeightedGraphCache = new WeakMap();
             formatIndependentPollDecimals();
-            stylePollAverageGraphs(pollAverageActiveIndex, pollAverageActiveX);
+            removePollAverageGraphOverlays();
+            applyWeightedPollAveragesToNativeGraphs();
             attachPollAverageCanvasTooltips();
-        }, 0);
+            syncPollBattlegroundFilter();
+        }, 60);
     };
     const isElementVisible = (element) => {
         if(!element) return false;
@@ -13624,6 +15280,199 @@
         return style.display !== "none"
             && style.visibility !== "hidden"
             && element.getClientRects().length > 0;
+    };
+    const POLL_BATTLEGROUND_FILTER_VALUE = "__bm_battleground_states__";
+    const isIndependentPollFilterSelectCacheValid = filters => {
+        if(!filters || !Object.values(filters).every(select => select?.isConnected)) return false;
+        const electionOptions = Array.from(filters.election.options || []).map(option => String(option.textContent || "").trim());
+        const stateOptions = Array.from(filters.state.options || []).map(option => String(option.textContent || "").trim());
+        return electionOptions.includes("President")
+            && electionOptions.includes("Governor")
+            && stateOptions.includes("National");
+    };
+    const getIndependentPollFilterSelects = () => {
+        if(isIndependentPollFilterSelectCacheValid(independentPollFilterSelectsCache)) {
+            return independentPollFilterSelectsCache;
+        }
+        const selects = Array.from(document.querySelectorAll("select")).filter(isElementVisible);
+        for(let index = 0; index <= selects.length - 4; index++){
+            const group = selects.slice(index, index + 4);
+            const optionTexts = group.map(select =>
+                Array.from(select.options || []).map(option => String(option.textContent || "").trim())
+            );
+            const isPollGroup = optionTexts[0].includes("President")
+                && optionTexts[0].includes("Governor")
+                && optionTexts[1].includes("National")
+                && optionTexts[2].includes("Primary")
+                && optionTexts[2].includes("General");
+            if(isPollGroup) {
+                independentPollFilterSelectsCache = {
+                    election: group[0],
+                    state: group[1],
+                    category: group[2],
+                    party: group[3]
+                };
+                return independentPollFilterSelectsCache;
+            }
+        }
+        independentPollFilterSelectsCache = null;
+        return null;
+    };
+    const ensurePollBattlegroundStateOption = stateSelect => {
+        if(!stateSelect) return null;
+        let option = Array.from(stateSelect.options || []).find(entry =>
+            entry.value === POLL_BATTLEGROUND_FILTER_VALUE
+        );
+        if(option) return option;
+        option = document.createElement("option");
+        option.value = POLL_BATTLEGROUND_FILTER_VALUE;
+        option.textContent = "Battleground States";
+        option.dataset.bmBattlegroundFilter = "true";
+        const nationalOption = Array.from(stateSelect.options || []).find(entry =>
+            String(entry.textContent || "").trim() === "National"
+        );
+        if(nationalOption?.nextSibling) {
+            stateSelect.insertBefore(option, nationalOption.nextSibling);
+        } else {
+            stateSelect.appendChild(option);
+        }
+        return option;
+    };
+    const getPollBattlegroundStateCodes = () => {
+        if(pollBattlegroundStateCodesCache) return pollBattlegroundStateCodesCache;
+        const states = Executive?.data?.states || {};
+        pollBattlegroundStateCodesCache = new Set(Object.keys(states)
+            .filter(code => isMsnbcGameBattlegroundState({ code }))
+            .map(code => String(code).toUpperCase()));
+        return pollBattlegroundStateCodesCache;
+    };
+    const findPollWeekHeadingForTable = table => {
+        let sibling = table?.previousElementSibling || null;
+        while(sibling){
+            if(/^H[1-3]$/.test(sibling.tagName || "") && parsePollWeekHeading(sibling.textContent)) {
+                return sibling;
+            }
+            if(sibling.matches?.("table.indPollTitleTbl, table.indPollTitleTbl2")) break;
+            sibling = sibling.previousElementSibling;
+        }
+        return null;
+    };
+    const clearPollBattlegroundRowFiltering = () => {
+        document.querySelectorAll("[data-bm-battleground-row]").forEach(row => {
+            row.style.removeProperty("display");
+            delete row.dataset.bmBattlegroundRow;
+        });
+        document.querySelectorAll("[data-bm-battleground-table]").forEach(table => {
+            table.style.removeProperty("display");
+            delete table.dataset.bmBattlegroundTable;
+        });
+        document.querySelectorAll("[data-bm-battleground-heading]").forEach(heading => {
+            heading.style.removeProperty("display");
+            delete heading.dataset.bmBattlegroundHeading;
+        });
+    };
+    const applyPollBattlegroundRowFiltering = () => {
+        if(!pollBattlegroundFilterActive) return;
+        const battlegroundStates = getPollBattlegroundStateCodes();
+        if(battlegroundStates.size === 0) return;
+        document.querySelectorAll("table.indPollTitleTbl, table.indPollTitleTbl2").forEach(table => {
+            const headerCells = Array.from(table.querySelectorAll("tr:first-child th"));
+            const electionIndex = headerCells.findIndex(cell =>
+                String(cell.textContent || "").trim() === "Election"
+            );
+            if(electionIndex < 0) return;
+            let visibleRows = 0;
+            Array.from(table.rows).slice(1).forEach(row => {
+                const electionText = String(row.cells[electionIndex]?.textContent || "").trim();
+                const stateMatch = electionText.match(/-\s*([A-Z]{2})\b/);
+                const visible = Boolean(stateMatch && battlegroundStates.has(stateMatch[1]));
+                row.dataset.bmBattlegroundRow = "true";
+                row.style.display = visible ? "" : "none";
+                if(visible) visibleRows++;
+            });
+            const visible = visibleRows > 0;
+            table.dataset.bmBattlegroundTable = "true";
+            table.style.display = visible ? "" : "none";
+            const heading = findPollWeekHeadingForTable(table);
+            if(heading){
+                heading.dataset.bmBattlegroundHeading = "true";
+                heading.style.display = visible ? "" : "none";
+            }
+        });
+    };
+    const syncPollBattlegroundFilter = () => {
+        const filters = getIndependentPollFilterSelects();
+        if(!filters) return;
+        ensurePollBattlegroundStateOption(filters.state);
+        if(!pollBattlegroundFilterActive) return;
+        filters.state.value = POLL_BATTLEGROUND_FILTER_VALUE;
+        applyPollBattlegroundRowFiltering();
+    };
+    const queuePollBattlegroundFilterSync = (delay = 0) => {
+        if(pollBattlegroundFilterRefreshTimer) clearTimeout(pollBattlegroundFilterRefreshTimer);
+        pollBattlegroundFilterRefreshTimer = setTimeout(() => {
+            pollBattlegroundFilterRefreshTimer = null;
+            if(!modShuttingDown) syncPollBattlegroundFilter();
+        }, delay);
+    };
+    const restorePollBattlegroundResults = () => {
+        if(pollBattlegroundResultsRestoreTimer) clearTimeout(pollBattlegroundResultsRestoreTimer);
+        pollBattlegroundResultsRestoreTimer = null;
+        const restoreState = pollBattlegroundResultsRestoreState;
+        pollBattlegroundResultsRestoreState = null;
+        if(!restoreState?.source || !Array.isArray(restoreState.snapshot)) return;
+        restoreState.source.length = 0;
+        restoreState.snapshot.forEach(poll => restoreState.source.push(poll));
+    };
+    const temporarilyLimitPollResultsToBattlegrounds = () => {
+        restorePollBattlegroundResults();
+        const source = getIndependentPollResultsData();
+        if(!Array.isArray(source) || source.length === 0) return;
+        const battlegroundStates = getPollBattlegroundStateCodes();
+        if(battlegroundStates.size === 0) return;
+        const snapshot = source.slice();
+        const filtered = snapshot.filter(poll =>
+            battlegroundStates.has(String(poll?.stateID || "").toUpperCase())
+        );
+        pollBattlegroundResultsRestoreState = { source, snapshot };
+        source.length = 0;
+        filtered.forEach(poll => source.push(poll));
+        pollBattlegroundResultsRestoreTimer = setTimeout(restorePollBattlegroundResults, 0);
+    };
+    const handlePollBattlegroundFilterChange = event => {
+        const filters = getIndependentPollFilterSelects();
+        if(!filters || !Object.values(filters).includes(event.target)) return;
+        if(event.target === filters.state){
+            if(filters.state.value === POLL_BATTLEGROUND_FILTER_VALUE) {
+                if(pollBattlegroundFilterActive) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    queuePollBattlegroundFilterSync(0);
+                    return;
+                }
+                pollBattlegroundFilterActive = true;
+            } else if(pollBattlegroundFilterActive) {
+                pollBattlegroundFilterActive = false;
+                restorePollBattlegroundResults();
+                clearPollBattlegroundRowFiltering();
+                return;
+            }
+        }
+        if(!pollBattlegroundFilterActive) return;
+        const allOption = Array.from(filters.state.options || []).find(option =>
+            String(option.textContent || "").trim() === "All"
+        );
+        temporarilyLimitPollResultsToBattlegrounds();
+        if(allOption) filters.state.value = allOption.value;
+        queuePollBattlegroundFilterSync(30);
+    };
+    const installPollBattlegroundFilter = () => {
+        if(!pollBattlegroundFilterInstalled){
+            document.addEventListener("change", handlePollBattlegroundFilterChange, true);
+            window.addEventListener("change", restorePollBattlegroundResults, false);
+            pollBattlegroundFilterInstalled = true;
+        }
+        queuePollBattlegroundFilterSync(0);
     };
     const isPollAverageCanvasElement = (canvas) => {
         if(!canvas || canvas.tagName?.toLowerCase() !== "canvas") return false;
@@ -13762,8 +15611,21 @@
         return { electionType, stateID, category, party, currentWeek, year };
     };
     const getPollCandidateKey = (candidate) => {
-        if(candidate?.id !== undefined && candidate?.id !== null) return String(candidate.id);
-        return `${candidate?.first || ""}|${candidate?.last || ""}|${candidate?.party || ""}`;
+        const candidateName = String(
+            candidate?.fullName
+            || candidate?.name
+            || [candidate?.first, candidate?.last].filter(Boolean).join(" ")
+            || candidate?.last
+            || candidate?.first
+            || ""
+        )
+            .replace(/\*/g, "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+        if(candidateName) return `${candidateName}|${getPollPartyCode(candidate) || "I"}`;
+        if(candidate?.id !== undefined && candidate?.id !== null) return `id:${candidate.id}`;
+        return `unknown|${getPollPartyCode(candidate) || "I"}`;
     };
     const getPollCandidateId = (candidate) => {
         const id = Number(candidate?.id);
@@ -13772,12 +15634,29 @@
     const getPollCandidateName = (candidate) => {
         return String(candidate?.last || candidate?.first || "Candidate").trim();
     };
-    const getPollPartyCode = (candidate) => {
-        const party = String(candidate?.party || candidate?.caucus || "").toLowerCase();
+    const parsePollPartyCode = value => {
+        const party = String(value || "").toLowerCase();
+        if(party.includes("ind")) return "I";
         if(party.includes("dem")) return "D";
         if(party.includes("rep")) return "R";
-        if(party.includes("ind")) return "I";
         return "";
+    };
+    const getPollPartyCode = (candidate) => {
+        const candidateId = getPollCandidateId(candidate);
+        if(candidateId !== null && typeof globalThis.findCandByID === "function"){
+            try {
+                const rawCandidate = globalThis.findCandByID([candidateId])?.[0];
+                if(rawCandidate){
+                    const wrapped = Executive?.data?.characters?.wrapCharacter?.(rawCandidate, "candidate");
+                    const profileParty = wrapped?.extendedAttribs?.party
+                        || wrapped?.party
+                        || rawCandidate?.party;
+                    const profileCode = parsePollPartyCode(profileParty);
+                    if(profileCode) return profileCode;
+                }
+            } catch(_err) {}
+        }
+        return parsePollPartyCode(candidate?.party || candidate?.caucus);
     };
     const getElectionCandidateId = (candidate) => {
         const id = Number(candidate?.id ?? candidate?.candID ?? candidate?.candidateId);
@@ -13927,10 +15806,7 @@
         } catch(_err) {}
         return false;
     };
-    const getDisplayedPollPct = (pct) => {
-        const number = Number(pct);
-        return Number.isFinite(number) ? Math.round(number) : 0;
-    };
+    const getDisplayedPollPct = (pct) => roundPollDisplayValue(pct) ?? 0;
     const pollRatingColours = {
         TOSS_UP: "#F6D66F",
         D: {
@@ -13953,9 +15829,14 @@
         }
     };
     const pollPartyColours = {
-        D: "#026eb6",
-        R: "#cc0000",
+        D: "#0487E6",
+        R: "#DD2929",
         I: "#777777"
+    };
+    const pollLeaderBaseColours = {
+        D: pollPartyColours.D,
+        R: pollPartyColours.R,
+        I: "#000000"
     };
     const escapePollHTML = (value) => {
         return String(value ?? "").replace(/[&<>"']/g, char => ({
@@ -14080,6 +15961,10 @@
                 font-weight: 900;
                 white-space: nowrap;
             }
+            #bm-poll-average-tooltip .bm-poll-undecided-row .bm-poll-name,
+            #bm-poll-average-tooltip .bm-poll-undecided-row .bm-poll-pct {
+                color: #777777;
+            }
             #bm-poll-average-tooltip .bm-poll-margin {
                 padding-top: 11px;
             }
@@ -14181,8 +16066,25 @@
     };
     const getPollWeeklyAverages = (filtersOverride = null) => {
         const filters = filtersOverride || getPollPageFilters();
+        if(!filters) return [];
         const pollResults = getIndependentPollResultsData();
-        if(!filters || pollResults.length === 0) return [];
+        if(pollResults.length === 0) return [];
+        const cacheKey = [
+            filters.electionType,
+            filters.stateID,
+            filters.category,
+            filters.party || "",
+            Number.isFinite(filters.currentWeek) ? filters.currentWeek : "",
+            Number.isFinite(filters.year) ? filters.year : ""
+        ].join("|");
+        const now = Date.now();
+        if(pollWeeklyAveragesCache
+            && pollWeeklyAveragesCache.source === pollResults
+            && pollWeeklyAveragesCache.sourceLength === pollResults.length
+            && pollWeeklyAveragesCache.key === cacheKey
+            && now - pollWeeklyAveragesCache.createdAt < 5000){
+            return pollWeeklyAveragesCache.value;
+        }
         let polls = pollResults.filter(poll => {
             return poll?.electType === filters.electionType
                 && poll?.stateID === filters.stateID
@@ -14220,6 +16122,8 @@
         polls.forEach(poll => {
             const week = Number(poll.week);
             const year = Number(poll.year);
+            const sample = getValidPollSample(poll);
+            if(sample === null) return;
             if(!Number.isFinite(week) || !Array.isArray(poll.results) || poll.results.length === 0) return;
             const candidateVotes = poll.results.reduce((sum, candidate) => sum + (Number(candidate.votes) || 0), 0);
             const totalVotes = candidateVotes + (Number(poll.undecided) || 0);
@@ -14232,18 +16136,21 @@
                 if(!weekData.candidates.has(key)){
                     weekData.candidates.set(key, {
                         name: getPollCandidateName(candidate),
-                        party: getPollPartyCode(candidate),
+                        party: getPollPartyCode(candidate)
+                            || (filters.category === "primary" ? filters.party : ""),
                         incumbent: false,
+                        weightedPctTotal: 0,
+                        sampleTotal: 0,
                         totalPct: 0,
-                        totalDisplayPct: 0,
                         polls: 0
                     });
                 }
                 const candidateData = weekData.candidates.get(key);
                 if(isPollCandidateIncumbent(candidate, poll)) candidateData.incumbent = true;
                 const candidatePct = ((Number(candidate.votes) || 0) / totalVotes) * 100;
+                candidateData.weightedPctTotal += candidatePct * sample;
+                candidateData.sampleTotal += sample;
                 candidateData.totalPct += candidatePct;
-                candidateData.totalDisplayPct += getDisplayedPollPct(candidatePct);
                 candidateData.polls++;
             });
         });
@@ -14254,18 +16161,109 @@
             })
             .map(weekData => {
                 const candidates = Array.from(weekData.candidates.values())
-                    .map(candidate => ({
-                        name: candidate.name,
-                        party: candidate.party,
-                        incumbent: candidate.incumbent,
-                        pct: candidate.polls > 0 ? candidate.totalPct / candidate.polls : 0,
-                        displayPct: candidate.polls > 0 ? Math.floor(candidate.totalDisplayPct / candidate.polls) : 0
-                    }))
+                    .filter(candidate => candidate.sampleTotal > 0)
+                    .map(candidate => {
+                        const pct = candidate.weightedPctTotal / candidate.sampleTotal;
+                        return {
+                            name: candidate.name,
+                            party: candidate.party,
+                            incumbent: candidate.incumbent,
+                            pct,
+                            simplePct: candidate.polls > 0 ? candidate.totalPct / candidate.polls : pct,
+                            displayPct: getDisplayedPollPct(pct)
+                        };
+                    })
                     .sort((a, b) => b.pct - a.pct);
                 return { week: weekData.week, year: weekData.year, candidates };
             })
             .filter(weekData => weekData.candidates.length > 0);
+        pollWeeklyAveragesCache = {
+            source: pollResults,
+            sourceLength: pollResults.length,
+            key: cacheKey,
+            createdAt: Date.now(),
+            value: weeksWithPolls
+        };
         return weeksWithPolls;
+    };
+    const getPollLeaderData = (candidates) => {
+        const sortedCandidates = (candidates || []).slice().sort((a, b) => {
+            const pctDifference = Number(b?.pct) - Number(a?.pct);
+            if(Number.isFinite(pctDifference) && pctDifference !== 0) return pctDifference;
+            return String(a?.name || "").localeCompare(String(b?.name || ""));
+        });
+        const first = sortedCandidates[0];
+        const second = sortedCandidates[1];
+        if(!first || !second) return { leader: first || null, margin: 0, text: "Tie" };
+        const firstDisplayPct = roundPollDisplayValue(first.pct);
+        const secondDisplayPct = roundPollDisplayValue(second.pct);
+        const margin = Number(firstDisplayPct) - Number(secondDisplayPct);
+        if(!Number.isFinite(margin) || margin <= 0){
+            return { leader: null, margin: 0, text: "Tie" };
+        }
+        return {
+            leader: first,
+            margin,
+            text: `${first.name} ${formatPollLeaderMarginValue(margin)}`
+        };
+    };
+    const getNativePollLeaderColour = (table, leaderIndex, electionIndex, weekData, leader) => {
+        const party = leader?.party || "";
+        if(party !== "D" && party !== "R") return pollLeaderBaseColours.I;
+        const individualRows = Array.from(table.rows).slice(1).filter(row =>
+            electionIndex === -1
+            || String(row.cells[electionIndex]?.textContent || "").trim().toUpperCase() !== "AVERAGE"
+        );
+        for(const row of individualRows){
+            const sourceCell = row.cells[leaderIndex];
+            if(!sourceCell) continue;
+            const leaderMatch = String(sourceCell.textContent || "").trim().match(/^(.+?)\s+[+-]\s*\d/);
+            if(!leaderMatch) continue;
+            const sourceLeader = findPollWeekCandidate(weekData, leaderMatch[1]);
+            if(sourceLeader?.party !== party) continue;
+            const colourSource = sourceCell.querySelector("[style*='color']") || sourceCell;
+            const computedColour = window.getComputedStyle(colourSource).color;
+            if(computedColour && computedColour !== "rgb(0, 0, 0)") return computedColour;
+        }
+        return pollLeaderBaseColours[party];
+    };
+    const updateWeightedPollAverageRows = () => {
+        const weeklyAverages = getPollWeeklyAverages();
+        if(weeklyAverages.length === 0) return;
+        const averagesByWeek = new Map(weeklyAverages.map(weekData => [
+            `${Number.isFinite(Number(weekData.year)) ? Number(weekData.year) : ""}|${weekData.week}`,
+            weekData
+        ]));
+        document.querySelectorAll("table.indPollTitleTbl, table.indPollTitleTbl2").forEach(table => {
+            const tableWeek = getPollTableWeek(table);
+            if(!tableWeek) return;
+            const weekData = averagesByWeek.get(`${Number.isFinite(Number(tableWeek.year)) ? Number(tableWeek.year) : ""}|${tableWeek.week}`);
+            if(!weekData) return;
+            const headerCells = Array.from(table.querySelectorAll("tr:first-child th"));
+            const headers = headerCells.map(cell => String(cell.textContent || "").trim());
+            const electionIndex = headers.findIndex(header => header === "Election");
+            const resultsIndex = headers.findIndex(header => header === "Results");
+            const leaderIndex = headers.findIndex(header => header === "Leader");
+            if(electionIndex === -1 || resultsIndex === -1) return;
+            const averageRow = Array.from(table.rows).slice(1).find(row =>
+                String(row.cells[electionIndex]?.textContent || "").trim().toUpperCase() === "AVERAGE"
+            );
+            if(!averageRow) return;
+            const resultsText = weekData.candidates
+                .map(candidate => `${candidate.name}: ${formatPollAveragePercentageValue(candidate.pct)}`)
+                .join(", ");
+            const resultsCell = averageRow.cells[resultsIndex];
+            if(resultsCell && resultsCell.textContent !== resultsText) resultsCell.textContent = resultsText;
+            if(leaderIndex === -1 || !averageRow.cells[leaderIndex]) return;
+            const leaderData = getPollLeaderData(weekData.candidates);
+            const leaderCell = averageRow.cells[leaderIndex];
+            if(leaderCell.textContent !== leaderData.text) leaderCell.textContent = leaderData.text;
+            leaderCell.dataset.bmPollRawLeader = leaderData.text;
+            leaderCell.dataset.bmPollFormattedLeader = leaderData.text;
+            leaderCell.style.color = leaderData.leader
+                ? getNativePollLeaderColour(table, leaderIndex, electionIndex, weekData, leaderData.leader)
+                : pollLeaderBaseColours.I;
+        });
     };
     const ensurePollAverageTooltip = () => {
         installPollAverageTooltipStyles();
@@ -14294,15 +16292,15 @@
     const formatPollLeaderMarginValue = (value) => {
         const number = Number(String(value || "").replace(/\s+/g, ""));
         if(!Number.isFinite(number)) return String(value || "").replace(/\s+/g, "");
-        return `${number < 0 ? "-" : "+"}${Math.round(Math.abs(number))}`;
+        return `${number < 0 ? "-" : "+"}${formatPollDisplayValue(Math.abs(number))}`;
     };
     const isRoundedPollMarginTie = (value) => {
         const number = Number(String(value || "").replace(/\s+/g, ""));
-        return Number.isFinite(number) && Math.round(Math.abs(number)) === 0;
+        return Number.isFinite(number) && Math.abs(number) <= Number.EPSILON;
     };
     const renderPollAverageTooltipCard = (week, year, candidates, marginParty, marginValue, leaderText, options = {}) => {
         const rating = getPollRating(marginParty, marginValue);
-        const marginColour = pollPartyColours[marginParty] || "#666666";
+        const marginColour = pollLeaderBaseColours[marginParty] || pollLeaderBaseColours.I;
         const weekLabel = Number.isFinite(Number(year)) ? `${week}, ${year}` : week;
         const sortedCandidates = candidates.slice().sort((a, b) => {
             const pctDiff = (Number(b.pct) || 0) - (Number(a.pct) || 0);
@@ -14323,6 +16321,18 @@
                 </div>
             `;
         }).join("");
+        const displayedTotal = sortedCandidates.reduce(
+            (total, candidate) => total + Math.max(0, Number(candidate.pct) || 0),
+            0
+        );
+        const undecidedPct = Math.max(0, roundPollDisplayValue(100 - displayedTotal) ?? 0);
+        const undecidedText = formatPollAveragePercentageValue(undecidedPct);
+        const undecidedRowHTML = undecidedPct > 0 ? `
+            <div class="bm-poll-row bm-poll-undecided-row">
+                <div class="bm-poll-name">Undecided</div>
+                <div class="bm-poll-pct">${undecidedText}</div>
+            </div>
+        ` : "";
         return `
             <div class="bm-poll-card">
                 <div class="bm-poll-title">AVERAGE - WEEK ${escapePollHTML(weekLabel)}</div>
@@ -14332,6 +16342,7 @@
                     <span>Est. Share</span>
                 </div>
                 ${rowsHTML}
+                ${undecidedRowHTML}
                 <div class="bm-poll-margin">
                     <span class="bm-margin-label">Leader:</span>
                     <span class="bm-margin-value" style="color:${marginColour};">${escapePollHTML(leaderText)}</span>
@@ -14353,70 +16364,39 @@
                     name: candidate.name,
                     party: matchingCandidate?.party || "",
                     incumbent: Boolean(matchingCandidate?.incumbent),
-                    pct: candidate.pct,
-                    pctText: candidate.pctText || `${candidate.pct}%`
+                    pct: Number(matchingCandidate?.pct) || 0,
+                    pctText: formatPollAveragePercentageValue(matchingCandidate?.pct)
                 };
             });
-            let marginParty = "";
-            let marginValue = 0;
-            let leaderText = "Tie";
-            const leaderMatch = visibleAverage.leaderText.match(/^\s*(.+?)\s*([+-]\s*\d+(?:\.\d+)?)\s*$/);
-            if(leaderMatch){
-                const leaderName = leaderMatch[1].trim();
-                const leaderCandidate = findPollWeekCandidate(weekData, leaderName);
-                const fallbackLeader = candidates
-                    .slice()
-                    .sort((a, b) => (Number(b.pct) || 0) - (Number(a.pct) || 0))[0];
-                const displayLeaderName = leaderCandidate?.name || fallbackLeader?.name || leaderName;
-                const margin = formatPollLeaderMarginValue(leaderMatch[2]);
-                marginParty = leaderCandidate?.party || fallbackLeader?.party || "";
-                marginValue = Math.abs(Number(margin));
-                leaderText = isRoundedPollMarginTie(leaderMatch[2])
-                    ? "Tie"
-                    : `${displayLeaderName} ${margin}`;
-            } else if(!/tie/i.test(visibleAverage.leaderText)) {
-                const sortedVisibleCandidates = candidates
-                    .slice()
-                    .sort((a, b) => (Number(b.pct) || 0) - (Number(a.pct) || 0));
-                const first = sortedVisibleCandidates[0];
-                const second = sortedVisibleCandidates[1];
-                if(first && second){
-                    const margin = first.pct - second.pct;
-                    marginParty = first.party || "";
-                    marginValue = Math.abs(margin);
-                    leaderText = isRoundedPollMarginTie(margin)
-                        ? "Tie"
-                        : `${first.name} ${formatPollLeaderMarginValue(margin)}`;
-                }
-            }
-            return renderPollAverageTooltipCard(weekData.week, weekData.year, candidates, marginParty, marginValue, leaderText, { primary: isPrimary });
+            const leaderData = getPollLeaderData(weekData.candidates);
+            return renderPollAverageTooltipCard(
+                weekData.week,
+                weekData.year,
+                candidates,
+                leaderData.leader?.party || "",
+                leaderData.margin,
+                leaderData.text,
+                { primary: isPrimary }
+            );
         }
         const topCandidates = weekData.candidates.slice(0, 3);
-        const formatAveragePct = (candidate) => {
-            if(Number.isFinite(candidate?.displayPct)) return Math.max(0, candidate.displayPct);
-            return Math.max(0, Math.floor(Number(candidate?.pct) || 0));
-        };
         const candidates = topCandidates.map(candidate => ({
             name: candidate.name,
             party: candidate.party,
             incumbent: Boolean(candidate.incumbent),
-            pct: formatAveragePct(candidate),
-            pctText: `${formatAveragePct(candidate)}%`
+            pct: Math.max(0, Number(candidate.pct) || 0),
+            pctText: formatPollAveragePercentageValue(candidate.pct)
         }));
-        const first = topCandidates[0];
-        const second = topCandidates[1];
-        let marginParty = "";
-        let marginValue = 0;
-        let leaderText = "Tie";
-        if(first && second){
-            const margin = formatAveragePct(first) - formatAveragePct(second);
-            marginParty = first.party || "";
-            marginValue = Math.abs(margin);
-            leaderText = isRoundedPollMarginTie(margin)
-                ? "Tie"
-                : `${first.name} ${formatPollLeaderMarginValue(margin)}`;
-        }
-        return renderPollAverageTooltipCard(weekData.week, weekData.year, candidates, marginParty, marginValue, leaderText, { primary: isPrimary });
+        const leaderData = getPollLeaderData(weekData.candidates);
+        return renderPollAverageTooltipCard(
+            weekData.week,
+            weekData.year,
+            candidates,
+            leaderData.leader?.party || "",
+            leaderData.margin,
+            leaderData.text,
+            { primary: isPrimary }
+        );
     };
     const getMsnbcPollElectionType = (race) => {
         if(race === "senate") return "usSenate";
@@ -14459,13 +16439,13 @@
             .slice(0, 4)
             .map(candidate => {
                 const pct = getPollCandidatePct(candidate, totalVotes);
-                return `${getPollCandidateName(candidate)}: ${Math.round(pct)}%`;
+                return `${getPollCandidateName(candidate)}: ${formatPollPercentageValue(pct)}`;
             })
             .join(", ");
     };
     const getMsnbcPollLeader = (poll) => {
         const leaderText = String(poll?.leaderText || "").trim();
-        if(leaderText) return leaderText;
+        if(leaderText) return formatPollLeaderText(leaderText);
         const candidates = Array.isArray(poll?.results) ? poll.results : [];
         const candidateVotes = candidates.reduce((sum, candidate) => sum + (Number(candidate?.votes) || 0), 0);
         const totalVotes = candidateVotes + (Number(poll?.undecided) || 0);
@@ -14476,7 +16456,7 @@
         const second = sortedCandidates[1];
         if(!first || !second) return "";
         const margin = getPollCandidatePct(first, totalVotes) - getPollCandidatePct(second, totalVotes);
-        return Math.round(Math.abs(margin)) === 0
+        return isRoundedPollMarginTie(margin)
             ? "Tie"
             : `${getPollCandidateName(first)} ${formatPollLeaderMarginValue(margin)}`;
     };
@@ -14544,7 +16524,7 @@
                     pct: Number(candidate.pct) || 0,
                     displayPct: Number.isFinite(candidate.displayPct)
                         ? candidate.displayPct
-                        : Math.round(Number(candidate.pct) || 0)
+                        : getDisplayedPollPct(candidate.pct)
                 }]
             }));
         }
@@ -14692,13 +16672,13 @@
                     </tr>
                     ${group.polls.map(poll => {
                         const leaderParty = getMsnbcPollLeaderParty(poll);
-                        const sample = Number(poll?.sample ?? poll?.respondents ?? poll?.sampleSize);
+                        const sample = getValidPollSample(poll);
                         return `
                             <tr>
                                 <td>${escapeHtml(electionTitle)}</td>
                                 <td>${escapeHtml(poll?.pollster || poll?.source || "Poll")}</td>
-                                <td>${Number.isFinite(sample) ? escapeHtml(formatWholeNumber(sample)) : ""}</td>
-                                <td>${escapeHtml(poll?.resultsText || getMsnbcPollResultText(poll))}</td>
+                                <td>${sample !== null ? escapeHtml(formatWholeNumber(sample)) : ""}</td>
+                                <td>${escapeHtml(formatPollPercentageText(poll?.resultsText || getMsnbcPollResultText(poll)))}</td>
                                 <td class="party-${escapeHtml(leaderParty || "I")}">${escapeHtml(getMsnbcPollLeader(poll))}</td>
                             </tr>
                         `;
@@ -14756,26 +16736,26 @@
         });
         window.setTimeout(() => redrawChart(weeklyAverages.length - 1), 0);
     };
+    const isPollAverageGraphCanvas = (canvas) => {
+        if(canvas?.tagName?.toLowerCase() !== "canvas") return false;
+        if(canvas.classList.contains("bm-poll-graph-overlay")) return false;
+        const rect = canvas.getBoundingClientRect();
+        return isElementVisible(canvas)
+            && rect.width >= 250
+            && rect.height >= 150
+            && rect.width >= rect.height * 1.25;
+    };
     const getPollAverageGraphElement = (targetElement) => {
-        if(targetElement.tagName?.toLowerCase() === "canvas") return targetElement;
+        if(isPollAverageGraphCanvas(targetElement)) return targetElement;
         const canvases = Array.from(targetElement.querySelectorAll?.("canvas") || []);
-        return canvases.find(canvas => {
-            const rect = canvas.getBoundingClientRect();
-            return isElementVisible(canvas) && rect.width >= 250 && rect.height >= 150;
-        }) || targetElement;
+        return canvases.find(isPollAverageGraphCanvas) || null;
     };
     const getPollAverageGraphCanvases = () => {
         return Array.from(new Set([
             ...document.querySelectorAll("#pollDetailCanvas, #pollDetailCanvas2, canvas.pollDetailCanvas"),
             ...document.querySelectorAll("#pollDetailDiv canvas, #pollDetailCanvDiv canvas"),
             ...document.querySelectorAll("canvas")
-        ])).filter(canvas => {
-            const rect = canvas.getBoundingClientRect();
-            return !canvas.classList.contains("bm-poll-graph-overlay")
-                && isElementVisible(canvas)
-                && rect.width >= 250
-                && rect.height >= 150;
-        });
+        ])).filter(isPollAverageGraphCanvas);
     };
     const getPollGraphSeriesKey = (candidate) => {
         return `${normalizePollCandidateName(candidate?.name)}|${candidate?.party || ""}`;
@@ -14790,26 +16770,63 @@
                         key,
                         name: candidate.name,
                         party: candidate.party || "",
+                        incumbent: Boolean(candidate.incumbent),
                         points: []
                     });
                 }
+                if(candidate.incumbent) seriesMap.get(key).incumbent = true;
                 seriesMap.get(key).points.push({
                     index: weekIndex,
                     week: weekData.week,
                     pct: Number(candidate.pct) || 0,
+                    simplePct: Number(candidate.simplePct) || Number(candidate.pct) || 0,
                     displayPct: Number.isFinite(candidate.displayPct)
                         ? candidate.displayPct
-                        : Math.round(Number(candidate.pct) || 0)
+                        : getDisplayedPollPct(candidate.pct)
                 });
             });
         });
         return Array.from(seriesMap.values())
-            .filter(series => series.points.length >= 2)
-            .sort((a, b) => {
-                const aLast = a.points[a.points.length - 1]?.pct || 0;
-                const bLast = b.points[b.points.length - 1]?.pct || 0;
-                return bLast - aLast;
-            });
+            .filter(series => series.points.length >= 2);
+    };
+    const getConfiguredPollGraphSeriesColours = (series, weeklyAverages, filtersOverride = null) => {
+        const filters = filtersOverride || getPollPageFilters() || {};
+        const latestWeek = weeklyAverages[weeklyAverages.length - 1] || {};
+        const electionYear = Number(filters.year) || Number(latestWeek.year) || "current";
+        const ballotParty = filters.party || series.find(item => item.party)?.party || "I";
+        const colourScope = filters.category === "primary" && filters.electionType === "president"
+            ? `presidential-primary:${String(filters.stateID || "polls").toLowerCase()}:${ballotParty}`
+            : [
+                "polls",
+                electionYear,
+                filters.electionType || "election",
+                filters.category || "general",
+                filters.stateID || "all",
+                ballotParty
+            ].join(":");
+        const candidates = series.map(item => {
+            const latestPoint = item.points[item.points.length - 1];
+            const rankingVotes = Math.max(0, Number(latestPoint?.pct) || 0) * 1000000;
+            return {
+                name: item.name,
+                party: item.party || "I",
+                incumbent: Boolean(item.incumbent),
+                currentVotes: rankingVotes,
+                votes: rankingVotes
+            };
+        });
+        const race = {
+            year: electionYear,
+            electionType: filters.electionType,
+            stateId: filters.stateID,
+            colourScope,
+            cands: candidates,
+            pW: false
+        };
+        return candidates.map(candidate => {
+            if(getCandidateVariantPartyKey(candidate).startsWith("I")) return pollPartyColours.I;
+            return stringifyColour(getCandidateColourForRace(candidate, race));
+        });
     };
     const normalizePollAverageCenters = (centers, targetLength) => {
         if(!Array.isArray(centers) || centers.length < 2 || targetLength < 2) return null;
@@ -14841,19 +16858,54 @@
         return Math.min(width * 0.965, width - 18);
     };
     const getPollAverageXCenters = (graphElement, weeklyAverages, graphWidth = null) => {
-        const pointCenters = getPollAveragePointCenters(graphElement, weeklyAverages);
-        const normalizedCenters = normalizePollAverageCenters(pointCenters, weeklyAverages.length);
         const width = graphWidth
             || graphElement.width
             || graphElement.getBoundingClientRect().width;
-        if(normalizedCenters) return normalizedCenters;
-        const plotLeft = width * 0.085;
-        const plotRight = Math.max(plotLeft + 1, getPollGraphPlotRight(width));
-        const fallbackCenters = Array.from({ length: weeklyAverages.length }, (_value, index) => {
-            if(weeklyAverages.length <= 1) return plotLeft;
-            return plotLeft + ((plotRight - plotLeft) * (index / (weeklyAverages.length - 1)));
+        const height = graphElement.height || graphElement.getBoundingClientRect().height;
+        const firstWeek = weeklyAverages[0];
+        const lastWeek = weeklyAverages[weeklyAverages.length - 1];
+        const scaleKey = [
+            graphElement.width || width,
+            height,
+            weeklyAverages.length,
+            firstWeek?.year || "",
+            firstWeek?.week || "",
+            lastWeek?.year || "",
+            lastWeek?.week || ""
+        ].join("|");
+        const cachedScale = graphElement._bmPollNativeXScale;
+        if(cachedScale?.key === scaleKey && Array.isArray(cachedScale.centers)) {
+            const sourceWidth = graphElement.width || width;
+            const scale = sourceWidth > 0 ? width / sourceWidth : 1;
+            return cachedScale.centers.map(center => center * scale);
+        }
+        let legendLeft = null;
+        try {
+            const context = graphElement.getContext?.("2d");
+            const image = context?.getImageData(0, 0, graphElement.width, graphElement.height)?.data;
+            if(image) legendLeft = getPollGraphLegendLeft(image, graphElement.width, graphElement.height);
+        } catch(_err) {}
+        const legendBoxSize = Math.max(18, Math.round(height * 0.06));
+        const dataRight = Number.isFinite(legendLeft)
+            ? legendLeft - legendBoxSize
+            : width * 0.82;
+        const detectedCenters = [
+            ...(getPollAverageRecordedPointCenters(graphElement) || []),
+            ...(getPollAverageRawPointCenters(graphElement) || [])
+        ].filter(center => Number.isFinite(center) && center < dataRight);
+        const dataLeft = detectedCenters.length > 0
+            ? Math.min(...detectedCenters)
+            : width * 0.055;
+        const plotRight = Math.max(dataLeft + 1, dataRight);
+        const stableCenters = Array.from({ length: weeklyAverages.length }, (_value, index) => {
+            if(weeklyAverages.length <= 1) return dataLeft;
+            return dataLeft + ((plotRight - dataLeft) * (index / (weeklyAverages.length - 1)));
         });
-        return fallbackCenters;
+        graphElement._bmPollNativeXScale = {
+            key: scaleKey,
+            centers: stableCenters.slice()
+        };
+        return stableCenters;
     };
     const getPollGraphChartMetrics = (graphElement, weeklyAverages, series, xCenters = null) => {
         const width = graphElement.width || graphElement.getBoundingClientRect().width;
@@ -14894,8 +16946,354 @@
         context.fillText(markerLabel, markerX, labelY);
         context.textAlign = "left";
     };
+    const getPollGraphCanvasBackground = (graphElement, metrics = null) => {
+        try {
+            const sourceContext = graphElement.getContext("2d");
+            if(metrics){
+                const left = Math.max(0, Math.floor(metrics.plotLeft + 2));
+                const top = Math.max(0, Math.floor(metrics.plotTop + 2));
+                const width = Math.max(1, Math.floor(metrics.plotRight - metrics.plotLeft - 4));
+                const height = Math.max(1, Math.floor(metrics.plotBottom - metrics.plotTop - 4));
+                const imageData = sourceContext?.getImageData(left, top, width, height)?.data;
+                if(imageData){
+                    const colours = new Map();
+                    for(let offset = 0; offset < imageData.length; offset += 16){
+                        if(imageData[offset + 3] < 220) continue;
+                        const key = `${imageData[offset]},${imageData[offset + 1]},${imageData[offset + 2]}`;
+                        colours.set(key, (colours.get(key) || 0) + 1);
+                    }
+                    const dominant = Array.from(colours.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
+                    if(dominant){
+                        const [red, green, blue] = dominant.split(",").map(Number);
+                        return { red, green, blue, css: `rgb(${red}, ${green}, ${blue})` };
+                    }
+                }
+            }
+            const pixel = sourceContext?.getImageData(1, 1, 1, 1)?.data;
+            if(pixel && pixel[3] > 0){
+                return { red: pixel[0], green: pixel[1], blue: pixel[2], css: `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})` };
+            }
+        } catch(_err) {}
+        return { red: 238, green: 238, blue: 238, css: "#eeeeee" };
+    };
+    const getNativePollGraphVerticalBounds = (graphElement, fallbackTop, fallbackBottom) => {
+        try {
+            const width = graphElement.width;
+            const height = graphElement.height;
+            const context = graphElement.getContext("2d");
+            const image = context.getImageData(0, 0, width, height).data;
+            const startX = Math.max(0, Math.floor(width * 0.075));
+            const endX = Math.min(width - 1, Math.floor(width * 0.92));
+            const candidateRows = [];
+            for(let y = Math.floor(height * 0.045); y <= Math.floor(height * 0.95); y++){
+                let hits = 0;
+                for(let x = startX; x <= endX; x += 2){
+                    const offset = ((y * width) + x) * 4;
+                    const red = image[offset];
+                    const green = image[offset + 1];
+                    const blue = image[offset + 2];
+                    const max = Math.max(red, green, blue);
+                    const min = Math.min(red, green, blue);
+                    if(image[offset + 3] >= 220 && max >= 150 && max <= 225 && max - min <= 8) hits++;
+                }
+                if(hits >= ((endX - startX) / 2) * 0.38) candidateRows.push(y);
+            }
+            const gridRows = [];
+            candidateRows.forEach(y => {
+                const last = gridRows[gridRows.length - 1];
+                if(last && y - last[last.length - 1] <= 1) last.push(y);
+                else gridRows.push([y]);
+            });
+            const centers = gridRows.map(rows => rows.reduce((sum, y) => sum + y, 0) / rows.length);
+            if(centers.length >= 6){
+                return { top: centers[0], bottom: centers[centers.length - 1], detected: true };
+            }
+        } catch(_err) {}
+        return { top: fallbackTop, bottom: fallbackBottom, detected: false };
+    };
+    const normalizeNativePollGraphBackground = (context, graphElement) => {
+        try {
+            const width = graphElement.width;
+            const height = graphElement.height;
+            const image = context.getImageData(0, 0, width, height);
+            for(let offset = 0; offset < image.data.length; offset += 4){
+                const red = image.data[offset];
+                const green = image.data[offset + 1];
+                const blue = image.data[offset + 2];
+                const alpha = image.data[offset + 3];
+                const max = Math.max(red, green, blue);
+                const min = Math.min(red, green, blue);
+                const transparentBackground = alpha <= 8;
+                const lightNeutralBackground = alpha >= 220 && min >= 185 && max - min <= 12;
+                if(transparentBackground || lightNeutralBackground){
+                    image.data[offset] = 238;
+                    image.data[offset + 1] = 238;
+                    image.data[offset + 2] = 238;
+                    image.data[offset + 3] = 255;
+                }
+            }
+            context.putImageData(image, 0, 0);
+        } catch(_err) {}
+    };
+    const eraseNativePollGraphSeries = (context, graphElement, metrics) => {
+        const { width, height, plotLeft, plotRight, plotTop, plotBottom } = metrics;
+        const pointRadius = Math.max(5, height * 0.012);
+        const left = Math.max(0, Math.floor(plotLeft - pointRadius - 3));
+        let right = Math.min(width - 1, Math.ceil(plotRight + pointRadius + 3));
+        const top = Math.max(0, Math.floor(plotTop));
+        const bottom = Math.min(height - 1, Math.ceil(plotBottom));
+        if(right <= left || bottom <= top) return;
+        try {
+            const canvasImage = context.getImageData(0, 0, width, height).data;
+            const legendLeft = getPollGraphLegendLeft(canvasImage, width, height);
+            if(Number.isFinite(legendLeft)){
+                right = Math.floor(legendLeft - pointRadius - 4);
+            } else {
+                right = Math.max(right, Math.floor(width * 0.82));
+            }
+            right = Math.min(width - 1, right);
+            const regionWidth = right - left + 1;
+            const regionHeight = bottom - top + 1;
+            context.fillStyle = "#EEEEEE";
+            context.fillRect(left, top, regionWidth, regionHeight);
+        } catch(_err) {}
+    };
+    const getNativePollGraphSeriesColours = (graphElement, series) => {
+        const cached = pollAverageNativeColourCache.get(graphElement);
+        const seriesKey = series.map(item => `${item.key}:${item.party || "I"}`).join("|");
+        if(cached
+            && cached.width === graphElement.width
+            && cached.height === graphElement.height
+            && cached.seriesKey === seriesKey){
+            return cached.colours;
+        }
+        const fallbackColours = series.map(item => {
+            if(item.party === "R") return "#FF0000";
+            if(item.party === "D") return "#0487E6";
+            return "#888888";
+        });
+        try {
+            const sourceContext = graphElement.getContext("2d");
+            const width = graphElement.width;
+            const height = graphElement.height;
+            const imageData = sourceContext.getImageData(Math.floor(width * 0.60), 0, Math.ceil(width * 0.40), height);
+            const counts = new Map();
+            for(let offset = 0; offset < imageData.data.length; offset += 4){
+                const alpha = imageData.data[offset + 3];
+                if(alpha < 220) continue;
+                const red = imageData.data[offset];
+                const green = imageData.data[offset + 1];
+                const blue = imageData.data[offset + 2];
+                const max = Math.max(red, green, blue);
+                const min = Math.min(red, green, blue);
+                const saturated = max >= 105 && max - min >= 38;
+                const candidateGrey = max >= 80 && max <= 180 && max - min <= 28;
+                if(!saturated && !candidateGrey) continue;
+                const key = `${red},${green},${blue}`;
+                const y = Math.floor((offset / 4) / imageData.width);
+                const entry = counts.get(key) || { red, green, blue, count: 0, totalY: 0 };
+                entry.count++;
+                entry.totalY += y;
+                counts.set(key, entry);
+            }
+            const minimumCount = Math.max(20, Math.round(width * height * 0.000035));
+            const dominantColours = Array.from(counts.values())
+                .filter(entry => entry.count >= minimumCount)
+                .sort((a, b) => b.count - a.count)
+                .reduce((selected, entry) => {
+                    const duplicate = selected.some(existing =>
+                        Math.abs(existing.red - entry.red)
+                        + Math.abs(existing.green - entry.green)
+                        + Math.abs(existing.blue - entry.blue) < 24
+                    );
+                    if(!duplicate) selected.push(entry);
+                    return selected;
+                }, [])
+                .slice(0, series.length)
+                .sort((a, b) => (a.totalY / a.count) - (b.totalY / b.count));
+            if(dominantColours.length === series.length){
+                const colours = dominantColours.map(entry => `rgb(${entry.red}, ${entry.green}, ${entry.blue})`);
+                pollAverageNativeColourCache.set(graphElement, {
+                    width,
+                    height,
+                    seriesKey,
+                    colours
+                });
+                return colours;
+            }
+        } catch(_err) {}
+        return fallbackColours;
+    };
+    const drawWeightedPollGraph = (context, graphElement, metrics, weeklyAverages, series, seriesColours) => {
+        const { width, height, plotLeft, plotRight, plotTop, plotBottom, xForIndex } = metrics;
+        const pointRadius = Math.max(5, height * 0.012);
+        const simpleMaxPct = Math.max(
+            1,
+            ...series.flatMap(item => item.points.map(point => Number(point.simplePct) || Number(point.pct) || 0))
+        );
+        const yMax = Math.max(10, simpleMaxPct * (7 / 6));
+        const yForPct = pct => {
+            const safePct = Math.max(0, Math.min(yMax, Number(pct) || 0));
+            return plotBottom - ((safePct / yMax) * (plotBottom - plotTop));
+        };
+        if(context.canvas !== graphElement) context.drawImage(graphElement, 0, 0, width, height);
+        normalizeNativePollGraphBackground(context, graphElement);
+        eraseNativePollGraphSeries(context, graphElement, metrics);
+
+        series.forEach((item, seriesIndex) => {
+            const colour = seriesColours[seriesIndex] || pollPartyColours[item.party] || "#888888";
+            const points = item.points
+                .map(point => ({ x: xForIndex(point.index), y: yForPct(point.pct) }))
+                .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+            if(points.length === 0) return;
+            context.strokeStyle = colour;
+            context.lineWidth = Math.max(3, height * 0.007);
+            context.lineJoin = "round";
+            context.lineCap = "round";
+            context.beginPath();
+            points.forEach((point, index) => {
+                if(index === 0) context.moveTo(point.x, point.y);
+                else context.lineTo(point.x, point.y);
+            });
+            context.stroke();
+            points.forEach(point => {
+                context.beginPath();
+                context.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
+                context.fillStyle = colour;
+                context.fill();
+                context.strokeStyle = "#ffffff";
+                context.lineWidth = Math.max(2, height * 0.004);
+                context.stroke();
+            });
+        });
+    };
+    const drawCompleteWeightedPollGraph = (graphElement, weeklyAverages, series, seriesColours) => {
+        const context = graphElement?.getContext?.("2d");
+        if(!context || weeklyAverages.length < 2 || series.length === 0) return;
+        const width = graphElement.width || Math.round(graphElement.getBoundingClientRect().width);
+        const height = graphElement.height || Math.round(graphElement.getBoundingClientRect().height);
+        if(width <= 0 || height <= 0) return;
+        const plotLeft = Math.max(58, width * 0.055);
+        const legendWidth = Math.max(155, width * 0.16);
+        const plotRight = Math.max(plotLeft + 40, width - legendWidth);
+        const plotTop = Math.max(42, height * 0.09);
+        const plotBottom = Math.max(plotTop + 80, height - Math.max(42, height * 0.09));
+        const maxPct = Math.max(
+            1,
+            ...series.flatMap(item => item.points.flatMap(point => [
+                Number(point.pct) || 0,
+                Number(point.simplePct) || 0
+            ]))
+        );
+        const yMax = Math.max(10, maxPct * (7 / 6));
+        const xCenters = Array.from({ length: weeklyAverages.length }, (_value, index) => {
+            return plotLeft + ((plotRight - plotLeft) * (index / (weeklyAverages.length - 1)));
+        });
+        const yForPct = pct => {
+            const safePct = Math.max(0, Math.min(yMax, Number(pct) || 0));
+            return plotBottom - ((safePct / yMax) * (plotBottom - plotTop));
+        };
+
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = "#EEEEEE";
+        context.fillRect(0, 0, width, height);
+        context.fillStyle = "#111111";
+        context.textAlign = "center";
+        context.textBaseline = "top";
+        context.font = `${Math.max(24, Math.round(height * 0.064))}px Georgia, 'Times New Roman', serif`;
+        context.fillText("Weekly Average", width / 2, 3);
+
+        context.strokeStyle = "#8F8F8F";
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(plotLeft, plotTop);
+        context.lineTo(plotLeft, plotBottom);
+        context.lineTo(plotRight, plotBottom);
+        context.stroke();
+
+        context.fillStyle = "#111111";
+        context.font = `${Math.max(13, Math.round(height * 0.032))}px Georgia, 'Times New Roman', serif`;
+        context.textAlign = "right";
+        context.textBaseline = "middle";
+        for(let tick = 0; tick <= 7; tick++){
+            const value = (yMax / 7) * tick;
+            const y = plotBottom - ((tick / 7) * (plotBottom - plotTop));
+            context.fillText(value.toFixed(1), plotLeft - 8, y);
+        }
+
+        context.textAlign = "center";
+        context.textBaseline = "top";
+        const labelStep = Math.max(1, Math.ceil(weeklyAverages.length / 6));
+        weeklyAverages.forEach((_weekData, index) => {
+            if(index % labelStep === 0) context.fillText(String(index), xCenters[index], plotBottom + 10);
+        });
+
+        const pointRadius = Math.max(5, height * 0.012);
+        series.forEach((item, seriesIndex) => {
+            const colour = seriesColours[seriesIndex] || pollPartyColours[item.party] || "#777777";
+            const points = item.points
+                .map(point => ({
+                    x: xCenters[point.index],
+                    y: yForPct(point.pct)
+                }))
+                .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+            if(points.length === 0) return;
+            context.strokeStyle = colour;
+            context.lineWidth = Math.max(3, height * 0.006);
+            context.lineJoin = "round";
+            context.lineCap = "round";
+            context.beginPath();
+            points.forEach((point, index) => {
+                if(index === 0) context.moveTo(point.x, point.y);
+                else context.lineTo(point.x, point.y);
+            });
+            context.stroke();
+            points.forEach(point => {
+                context.beginPath();
+                context.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
+                context.fillStyle = colour;
+                context.fill();
+                context.strokeStyle = "#FFFFFF";
+                context.lineWidth = Math.max(2, height * 0.004);
+                context.stroke();
+            });
+        });
+
+        const legendRowHeight = Math.max(30, height * 0.068);
+        const legendHeight = series.length * legendRowHeight;
+        const legendX = plotRight + Math.max(20, width * 0.018);
+        let legendY = Math.max(plotTop + 24, ((plotTop + plotBottom - legendHeight) / 2));
+        context.font = `${Math.max(15, Math.round(height * 0.036))}px Georgia, 'Times New Roman', serif`;
+        context.textAlign = "left";
+        context.textBaseline = "middle";
+        series.forEach((item, index) => {
+            const colour = seriesColours[index] || pollPartyColours[item.party] || "#777777";
+            const swatchSize = Math.max(22, Math.min(30, legendRowHeight - 4));
+            context.fillStyle = colour;
+            context.fillRect(legendX, legendY - (swatchSize / 2), swatchSize, swatchSize);
+            context.fillStyle = "#111111";
+            context.fillText(item.name, legendX + swatchSize + 7, legendY);
+            legendY += legendRowHeight;
+        });
+
+        const firstWeek = weeklyAverages[0];
+        const lastWeek = weeklyAverages[weeklyAverages.length - 1];
+        graphElement._bmPollNativeXScale = {
+            key: [
+                width,
+                height,
+                weeklyAverages.length,
+                firstWeek?.year || "",
+                firstWeek?.week || "",
+                lastWeek?.year || "",
+                lastWeek?.week || ""
+            ].join("|"),
+            centers: xCenters.slice()
+        };
+    };
     const drawPollAverageOverlay = (graphElement, overlay, weeklyAverages, activeIndex = null, activeX = null) => {
-        const series = getPollGraphSeries(weeklyAverages).slice(0, 3);
+        const series = getPollGraphSeries(weeklyAverages).slice(0, 10);
         const context = overlay.getContext("2d");
         if(!context || series.length === 0) return;
         const rect = graphElement.getBoundingClientRect();
@@ -14908,43 +17306,114 @@
         overlay.style.height = `${rect.height}px`;
         overlay.style.left = parentRect ? `${rect.left - parentRect.left}px` : `${graphElement.offsetLeft}px`;
         overlay.style.top = parentRect ? `${rect.top - parentRect.top}px` : `${graphElement.offsetTop}px`;
-        const metrics = getPollGraphChartMetrics(graphElement, weeklyAverages, series);
-        context.clearRect(0, 0, overlay.width, overlay.height);
+        const baseMetrics = getPollGraphChartMetrics(graphElement, weeklyAverages, series);
+        const nativeVerticalBounds = getNativePollGraphVerticalBounds(
+            graphElement,
+            baseMetrics.plotTop,
+            baseMetrics.plotBottom
+        );
+        const metrics = {
+            ...baseMetrics,
+            plotTop: nativeVerticalBounds.top,
+            plotBottom: nativeVerticalBounds.bottom
+        };
+        const seriesColours = getConfiguredPollGraphSeriesColours(series, weeklyAverages);
+        let weightedGraph = pollAverageWeightedGraphCache.get(overlay);
+        if(!weightedGraph
+            || weightedGraph.weeklyAverages !== weeklyAverages
+            || weightedGraph.width !== width
+            || weightedGraph.height !== height
+            || weightedGraph.seriesColours.join("|") !== seriesColours.join("|")){
+            const baseCanvas = document.createElement("canvas");
+            baseCanvas.width = width;
+            baseCanvas.height = height;
+            const baseContext = baseCanvas.getContext("2d");
+            if(baseContext) drawWeightedPollGraph(baseContext, graphElement, metrics, weeklyAverages, series, seriesColours);
+            weightedGraph = {
+                weeklyAverages,
+                width,
+                height,
+                seriesColours,
+                canvas: baseCanvas
+            };
+            pollAverageWeightedGraphCache.set(overlay, weightedGraph);
+        }
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, width, height);
+        context.drawImage(weightedGraph.canvas, 0, 0);
         drawPollGraphWeekMarker(context, metrics, weeklyAverages, activeIndex, activeX);
     };
-    const stylePollAverageGraphs = (activeIndex = null, activeX = null) => {
+    const removePollAverageGraphOverlays = () => {
+        document.querySelectorAll("canvas.bm-poll-graph-overlay").forEach(overlay => overlay.remove());
+    };
+    const applyWeightedPollAveragesToNativeGraphs = () => {
         const weeklyAverages = getPollWeeklyAverages();
         if(weeklyAverages.length < 2) return;
+        const series = getPollGraphSeries(weeklyAverages).slice(0, 10);
+        if(series.length === 0) return;
         getPollAverageGraphCanvases().forEach(graphElement => {
-            const parent = graphElement.parentElement;
-            if(!parent) return;
-            if(window.getComputedStyle(parent).position === "static") parent.style.position = "relative";
-            let overlay = pollAverageVisualOverlays.get(graphElement);
-            if(!overlay || overlay.parentElement !== parent){
-                overlay = document.createElement("canvas");
-                overlay.className = "bm-poll-graph-overlay";
-                overlay.style.position = "absolute";
-                overlay.style.pointerEvents = "none";
-                overlay.style.zIndex = "2";
-                overlay.style.display = "block";
-                parent.appendChild(overlay);
-                pollAverageVisualOverlays.set(graphElement, overlay);
-            }
-            const isActiveGraph = graphElement === pollAverageActiveGraph;
-            drawPollAverageOverlay(
-                graphElement,
-                overlay,
-                weeklyAverages,
-                isActiveGraph ? activeIndex : null,
-                isActiveGraph ? activeX : null
-            );
+            const context = graphElement.getContext("2d");
+            if(!context) return;
+            const seriesColours = getConfiguredPollGraphSeriesColours(series, weeklyAverages);
+            drawCompleteWeightedPollGraph(graphElement, weeklyAverages, series, seriesColours);
         });
+    };
+    const ensurePollAverageWeekMarker = () => {
+        if(pollAverageWeekMarker?.isConnected) return pollAverageWeekMarker;
+        const marker = document.createElement("div");
+        marker.className = "bm-poll-week-marker";
+        marker.style.position = "fixed";
+        marker.style.width = "0";
+        marker.style.pointerEvents = "none";
+        marker.style.zIndex = "99998";
+        marker.style.display = "none";
+
+        const label = document.createElement("span");
+        label.style.position = "absolute";
+        label.style.top = "0";
+        label.style.left = "0";
+        label.style.transform = "translateX(-50%)";
+        label.style.whiteSpace = "nowrap";
+        label.style.color = "rgba(0, 0, 0, 0.62)";
+        label.style.font = "700 12px Arial, Helvetica, sans-serif";
+
+        const line = document.createElement("span");
+        line.style.position = "absolute";
+        line.style.top = "18px";
+        line.style.left = "0";
+        line.style.bottom = "0";
+        line.style.borderLeft = "2px solid rgba(0, 0, 0, 0.34)";
+
+        marker.append(label, line);
+        document.body.appendChild(marker);
+        pollAverageWeekMarker = marker;
+        return marker;
+    };
+    const showPollAverageWeekMarker = (graphElement, weeklyAverages, index, markerX) => {
+        if(!graphElement || !weeklyAverages[index]) return;
+        const rect = graphElement.getBoundingClientRect();
+        const sourceWidth = graphElement.width || rect.width;
+        const cssX = sourceWidth > 0 ? markerX * (rect.width / sourceWidth) : markerX;
+        const marker = ensurePollAverageWeekMarker();
+        const activeWeek = weeklyAverages[index];
+        marker.firstElementChild.textContent = Number.isFinite(Number(activeWeek.year))
+            ? `Week ${activeWeek.week}, ${activeWeek.year}`
+            : `Week ${activeWeek.week}`;
+        marker.style.left = `${rect.left + cssX}px`;
+        marker.style.top = `${rect.top + (rect.height * 0.075)}px`;
+        marker.style.height = `${rect.height * 0.785}px`;
+        marker.style.display = "block";
+    };
+    const hidePollAverageWeekMarker = () => {
+        if(pollAverageWeekMarker) pollAverageWeekMarker.style.display = "none";
     };
     const isPollAveragePointPixel = (red, green, blue, alpha) => {
         if(alpha < 100) return false;
         const maxChannel = Math.max(red, green, blue);
         const minChannel = Math.min(red, green, blue);
-        return maxChannel > 130 && (maxChannel - minChannel) > 80;
+        const colouredPoint = maxChannel > 105 && (maxChannel - minChannel) > 24;
+        const neutralPoint = maxChannel <= 180 && (maxChannel - minChannel) <= 24;
+        return colouredPoint || neutralPoint;
     };
     const getPollGraphLegendLeft = (imageData, width, height) => {
         const startX = Math.floor(width * 0.66);
@@ -14970,6 +17439,94 @@
             }
         }
         return (clusterStart !== null && clusterEnd - clusterStart >= 14) ? clusterStart : null;
+    };
+    const recolourNativePollGraphLegend = (context, graphElement, seriesColours) => {
+        if(!context || !graphElement || seriesColours.length === 0) return;
+        try {
+            const width = graphElement.width;
+            const height = graphElement.height;
+            const image = context.getImageData(0, 0, width, height);
+            const startX = Math.floor(width * 0.72);
+            const endX = Math.floor(width * 0.94);
+            const startY = Math.floor(height * 0.18);
+            const endY = Math.floor(height * 0.85);
+            const regionWidth = endX - startX + 1;
+            const regionHeight = endY - startY + 1;
+            const mask = new Uint8Array(regionWidth * regionHeight);
+            const isLegendFill = offset => {
+                const red = image.data[offset];
+                const green = image.data[offset + 1];
+                const blue = image.data[offset + 2];
+                const alpha = image.data[offset + 3];
+                if(alpha < 220) return false;
+                const max = Math.max(red, green, blue);
+                const min = Math.min(red, green, blue);
+                return (max > 105 && max - min > 24)
+                    || (max <= 180 && max - min <= 24);
+            };
+            for(let y = 0; y < regionHeight; y++){
+                for(let x = 0; x < regionWidth; x++){
+                    const sourceOffset = ((((startY + y) * width) + startX + x) * 4);
+                    if(isLegendFill(sourceOffset)) mask[(y * regionWidth) + x] = 1;
+                }
+            }
+            const visited = new Uint8Array(mask.length);
+            const boxes = [];
+            for(let y = 0; y < regionHeight; y++){
+                for(let x = 0; x < regionWidth; x++){
+                    const startIndex = (y * regionWidth) + x;
+                    if(mask[startIndex] !== 1 || visited[startIndex] === 1) continue;
+                    const queue = [[x, y]];
+                    visited[startIndex] = 1;
+                    let cursor = 0;
+                    let minX = x;
+                    let maxX = x;
+                    let minY = y;
+                    let maxY = y;
+                    let area = 0;
+                    while(cursor < queue.length){
+                        const [currentX, currentY] = queue[cursor++];
+                        area++;
+                        minX = Math.min(minX, currentX);
+                        maxX = Math.max(maxX, currentX);
+                        minY = Math.min(minY, currentY);
+                        maxY = Math.max(maxY, currentY);
+                        [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dy]) => {
+                            const nextX = currentX + dx;
+                            const nextY = currentY + dy;
+                            if(nextX < 0 || nextX >= regionWidth || nextY < 0 || nextY >= regionHeight) return;
+                            const nextIndex = (nextY * regionWidth) + nextX;
+                            if(mask[nextIndex] !== 1 || visited[nextIndex] === 1) return;
+                            visited[nextIndex] = 1;
+                            queue.push([nextX, nextY]);
+                        });
+                    }
+                    const boxWidth = maxX - minX + 1;
+                    const boxHeight = maxY - minY + 1;
+                    if(boxWidth >= 14
+                        && boxHeight >= 14
+                        && boxWidth <= 60
+                        && boxHeight <= 60
+                        && area >= boxWidth * boxHeight * 0.55){
+                        boxes.push({
+                            left: startX + minX,
+                            top: startY + minY,
+                            width: boxWidth,
+                            height: boxHeight
+                        });
+                    }
+                }
+            }
+            boxes.sort((a, b) => a.top - b.top).slice(0, seriesColours.length).forEach((box, index) => {
+                const squareSize = Math.min(
+                    box.width,
+                    box.height,
+                    Math.max(18, Math.round(height * 0.065))
+                );
+                context.fillStyle = seriesColours[index];
+                context.fillRect(box.left, box.top, squareSize, squareSize);
+            });
+        } catch(_err) {}
     };
     const isPollAverageAxisPointPixel = (red, green, blue, alpha) => {
         if(alpha < 100) return false;
@@ -15307,13 +17864,35 @@
             markerX
         };
     };
-    const showPollAverageTooltip = (event, targetElement) => {
+    const showPollAverageTooltip = (event, targetElement, boundGraphElement = null) => {
+        const graphElement = boundGraphElement?.isConnected
+            && isPollAverageGraphCanvas(boundGraphElement)
+            ? boundGraphElement
+            : getPollAverageGraphElement(targetElement);
+        if(!graphElement) {
+            hidePollAverageTooltip();
+            return;
+        }
+        if(typeof document.elementFromPoint === "function") {
+            const topElement = document.elementFromPoint(event.clientX, event.clientY);
+            const graphIsCanvas = graphElement.tagName?.toLowerCase() === "canvas";
+            const visibleCanvas = topElement?.closest?.("canvas") || null;
+            const pointerIsOnGraph = graphIsCanvas
+                ? visibleCanvas === graphElement
+                : Boolean(
+                    visibleCanvas
+                    && graphElement.contains?.(visibleCanvas)
+                );
+            if(!pointerIsOnGraph) {
+                hidePollAverageTooltip();
+                return;
+            }
+        }
         const weeklyAverages = getPollWeeklyAverages();
         if(weeklyAverages.length === 0) {
             hidePollAverageTooltip();
             return;
         }
-        const graphElement = getPollAverageGraphElement(targetElement);
         const rect = graphElement.getBoundingClientRect();
         if(event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom){
             hidePollAverageTooltip();
@@ -15331,7 +17910,7 @@
         pollAverageActiveIndex = index;
         pollAverageActiveX = selection.markerX;
         pollAverageActiveGraph = graphElement;
-        stylePollAverageGraphs(index, selection.markerX);
+        showPollAverageWeekMarker(graphElement, weeklyAverages, index, selection.markerX);
         const tooltip = ensurePollAverageTooltip();
         tooltip.innerHTML = formatPollAverageTooltipHTML(weeklyAverages[index]);
         const offset = 14;
@@ -15347,10 +17926,10 @@
     };
     const hidePollAverageTooltip = () => {
         if(pollAverageTooltip) pollAverageTooltip.style.display = "none";
+        hidePollAverageWeekMarker();
         pollAverageActiveIndex = null;
         pollAverageActiveX = null;
         pollAverageActiveGraph = null;
-        stylePollAverageGraphs(null, null);
     };
     const attachPollAverageCanvasTooltips = () => {
         const filters = getPollPageFilters();
@@ -15368,10 +17947,18 @@
             const rect = target.getBoundingClientRect();
             if(!isElementVisible(target) || rect.width < 250 || rect.height < 150) return;
             if(pollAverageTooltipTargets.has(target)) return;
+            const graphElement = getPollAverageGraphElement(target);
+            if(!graphElement) return;
             pollAverageTooltipTargets.add(target);
             target.style.cursor = "crosshair";
-            target.addEventListener("mouseenter", event => showPollAverageTooltip(event, target));
-            target.addEventListener("mousemove", event => showPollAverageTooltip(event, target));
+            target.addEventListener(
+                "mouseenter",
+                event => showPollAverageTooltip(event, target, graphElement)
+            );
+            target.addEventListener(
+                "mousemove",
+                event => showPollAverageTooltip(event, target, graphElement)
+            );
             target.addEventListener("mouseleave", hidePollAverageTooltip);
             attachedCount++;
         });
@@ -15401,7 +17988,26 @@
             }, 100);
             return;
         }
-        independentPollObserver = new MutationObserver(queueIndependentPollDecimalFormatting);
+        installPollBattlegroundFilter();
+        independentPollObserver = new MutationObserver(mutations => {
+            const hoverSelector = "#bm-poll-average-tooltip, .bm-poll-week-marker";
+            const isHoverElement = node => {
+                const element = node?.nodeType === 1 ? node : node?.parentElement;
+                return Boolean(element?.matches?.(hoverSelector) || element?.closest?.(hoverSelector));
+            };
+            const shouldRefresh = mutations.some(mutation => {
+                if(isHoverElement(mutation.target)) return false;
+                const changedNodes = [
+                    ...Array.from(mutation.addedNodes || []),
+                    ...Array.from(mutation.removedNodes || [])
+                ];
+                return changedNodes.length === 0 || !changedNodes.every(isHoverElement);
+            });
+            if(shouldRefresh) {
+                queueIndependentPollDecimalFormatting();
+                if(!hasIndependentPollSurface()) queuePollBattlegroundFilterSync(100);
+            }
+        });
         independentPollObserver.observe(document.body, {
             childList: true,
             subtree: true,
@@ -15434,16 +18040,39 @@
         presidentialPrimaryTabResetInstalled = false;
         electionNightSkipEndPrimaryRefreshInstalled = false;
         if(presidentialPrimaryResetTimer) clearTimeout(presidentialPrimaryResetTimer);
+        if(nativePrimaryPanelSelectionTimer) clearTimeout(nativePrimaryPanelSelectionTimer);
         if(electionNightThemeClickTimer) clearTimeout(electionNightThemeClickTimer);
         if(msnbcElectionButtonInstallTimer) clearTimeout(msnbcElectionButtonInstallTimer);
         if(independentPollObserverInstallTimer) clearTimeout(independentPollObserverInstallTimer);
+        if(independentPollFormatTimer) clearTimeout(independentPollFormatTimer);
+        if(pollBattlegroundFilterRefreshTimer) clearTimeout(pollBattlegroundFilterRefreshTimer);
+        if(pollBattlegroundResultsRestoreTimer) clearTimeout(pollBattlegroundResultsRestoreTimer);
         if(marginThroughNightUpdateTimer) clearTimeout(marginThroughNightUpdateTimer);
         presidentialPrimaryResetTimer = null;
+        nativePrimaryPanelSelectionTimer = null;
         electionNightThemeClickTimer = null;
         msnbcElectionButtonInstallTimer = null;
         independentPollObserverInstallTimer = null;
+        independentPollFormatTimer = null;
+        pollBattlegroundFilterRefreshTimer = null;
+        pollBattlegroundResultsRestoreTimer = null;
+        independentPollFormatQueued = false;
+        pollBattlegroundFilterActive = false;
+        restorePollBattlegroundResults();
+        pollBattlegroundStateCodesCache = null;
+        independentPollFilterSelectsCache = null;
+        if(pollBattlegroundFilterInstalled) {
+            document.removeEventListener("change", handlePollBattlegroundFilterChange, true);
+            window.removeEventListener("change", restorePollBattlegroundResults, false);
+            pollBattlegroundFilterInstalled = false;
+        }
+        clearPollBattlegroundRowFiltering();
+        pollWeeklyAveragesCache = null;
         marginThroughNightUpdateTimer = null;
         marginThroughNightUpdateQueued = false;
+        Object.keys(nativePanelSelectedStateByElectionType).forEach(key => {
+            delete nativePanelSelectedStateByElectionType[key];
+        });
         independentPollObserverFollowupTimers.forEach(timer => clearTimeout(timer));
         independentPollObserverFollowupTimers.clear();
         electionNightSkipEndRefreshTimers.forEach(timer => clearTimeout(timer));
@@ -15482,13 +18111,18 @@
         try {
             ballotMeasuresSubmod?.destroy?.();
         } catch(error) {}
+        try {
+            votingBooth?.destroy?.();
+        } catch(error) {}
         stateCountyZoomController = null;
         precinctResultsController = null;
         cityMayoralMap = null;
         specialElectionNight = null;
         ballotMeasuresSubmod = null;
+        votingBooth = null;
         globalThis.bmPrecinctResults = null;
         globalThis.bmCityMayoralMap = null;
+        removePresidentialPrimaryNationalControls();
         pauseElectionNightTheme({ reset: true });
         if(electionNightThemeAudio) {
             electionNightThemeAudio.pause();
@@ -15515,9 +18149,11 @@
             "bm-chance-simulations-overlay"
         ].forEach(id => document.getElementById(id)?.remove());
         pollAverageTooltip?.remove();
+        pollAverageWeekMarker?.remove();
         marginThroughNightTooltip?.remove();
         rcvResultsModal?.remove();
         pollAverageTooltip = null;
+        pollAverageWeekMarker = null;
         marginThroughNightTooltip = null;
         rcvResultsModal = null;
         modInitialized = false;
@@ -15530,6 +18166,7 @@
         window.addEventListener("beforeunload", handleModPageExit, true);
         Executive.styles.registerStyle("styles/general.css");
         Executive.styles.registerStyle("styles/special-election-night.css");
+        Executive.styles.registerStyle("styles/voting-booth.css");
         Executive.styles.registerThemeAwareStyle("styles/light.css", "styles/dark.css");
         const configText = fs.readFileSync(Executive.mods.getRelativePathPrefix() + path.sep + "config.json", "utf8");
         config = JSON.parse(configText);
@@ -15562,6 +18199,293 @@
             }
         });
         ballotMeasuresSubmod.install();
+        const getCandidateCharacterArrayForParty = candidate => {
+            if(Array.isArray(candidate)) return candidate;
+            for(const key of ["characterArray", "character", "candArray", "array"]) {
+                try {
+                    if(Array.isArray(candidate?.[key])) return candidate[key];
+                } catch {}
+            }
+            try {
+                const candidateId = candidate?.id
+                    ?? candidate?.ID
+                    ?? candidate?.candID
+                    ?? candidate?.candidateId
+                    ?? candidate?.candidateID
+                    ?? candidate?.characterId
+                    ?? candidate?.characterID;
+                if(candidateId !== undefined && candidateId !== null) {
+                    const found = findCandByID([candidateId])?.[0];
+                    if(Array.isArray(found)) return found;
+                    if(Array.isArray(found?.characterArray)) return found.characterArray;
+                }
+            } catch {}
+            return null;
+        };
+
+        const readPartyFromCharacterArray = characterArray => {
+            let candidateEnum = {};
+            try { candidateEnum = Executive?.enums?.characterArray?.candidate || {}; } catch {}
+            let extended = null;
+            try { extended = characterArray?.[candidateEnum.extendedAttribs ?? 178]; } catch {}
+            let caucus = "";
+            try { caucus = String(characterArray?.[candidateEnum.caucusParty ?? 0] ?? "").trim(); } catch {}
+            return { party: String(extended?.party ?? "").trim(), caucus };
+        };
+
+        const resolveActualCandidateParty = candidate => {
+            if(!candidate) return null;
+            let party = "";
+            let caucus = "";
+            const characterArray = getCandidateCharacterArrayForParty(candidate);
+            if(characterArray) {
+                const read = readPartyFromCharacterArray(characterArray);
+                party = read.party;
+                caucus = read.caucus;
+            }
+            if(!party) {
+                try {
+                    party = String(
+                        candidate?.extendedAttribs?.party ?? candidate?.party ?? ""
+                    ).trim();
+                } catch {}
+            }
+            if(!caucus) {
+                try {
+                    caucus = String(
+                        candidate?.caucusParty
+                        ?? candidate?.caucus
+                        ?? candidate?.extendedAttribs?.caucusParty
+                        ?? ""
+                    ).trim();
+                } catch {}
+            }
+            if(!party) return null;
+            const partyInitial = party.charAt(0).toUpperCase();
+            if(partyInitial === "D") return "D";
+            if(partyInitial === "R") return "R";
+            if(partyInitial === "I") {
+                const caucusInitial = caucus.charAt(0).toUpperCase();
+                if(caucusInitial === "D") return "ID";
+                if(caucusInitial === "R") return "IR";
+                return "I";
+            }
+            return null;
+        };
+        const resolvePrimaryCandidatePartyKey = resolveActualCandidateParty;
+
+        const getCandidateIdentityKey = candidate => {
+            if(!candidate) return "";
+            let candidateEnum = {};
+            try { candidateEnum = Executive?.enums?.characterArray?.candidate || {}; } catch {}
+            const characterArray = getCandidateCharacterArrayForParty(candidate);
+            let identity = null;
+            try {
+                identity = characterArray?.[candidateEnum.candidateId ?? 111]
+                    ?? candidate?.candidateId
+                    ?? candidate?.id
+                    ?? candidate?.candID;
+            } catch {}
+            const normalizedId = String(identity ?? "").trim();
+            if(normalizedId && normalizedId !== "0") return `id:${normalizedId}`;
+            let first = "";
+            let last = "";
+            try {
+                first = characterArray?.[candidateEnum.firstName ?? 4] ?? candidate?.firstName ?? "";
+                last = characterArray?.[candidateEnum.lastName ?? 5] ?? candidate?.lastName ?? "";
+            } catch {}
+            const name = `${first} ${last}`.replace(/\s+/g, " ").trim().toLowerCase();
+            return name ? `name:${name}` : "";
+        };
+
+        const PRESIDENTIAL_TICKETS = [
+            {
+                party: "D",
+                nominees: ["demPresNominee", "demPresidentNominee", "demNominee"],
+                runningMates: ["demRunningMate", "demVPNominee", "demVP", "potentDemVicePres"]
+            },
+            {
+                party: "R",
+                nominees: ["repPresNominee", "repPresidentNominee", "repNominee"],
+                runningMates: ["repRunningMate", "repVPNominee", "repVP", "potentRepVicePres"]
+            }
+        ];
+
+        const resolveNominationTicketParty = candidate => {
+            const identity = getCandidateIdentityKey(candidate);
+            if(identity) {
+                for(const ticket of PRESIDENTIAL_TICKETS) {
+                    for(const name of ticket.nominees) {
+                        let nominee = null;
+                        try { nominee = readRuntimeValue(name); } catch {}
+                        if(!nominee || (Array.isArray(nominee) && nominee.length === 0)) continue;
+                        if(getCandidateIdentityKey(nominee) === identity) return ticket.party;
+                    }
+                }
+            }
+            let candidateEnum = {};
+            try { candidateEnum = Executive?.enums?.characterArray?.candidate || {}; } catch {}
+            const characterArray = getCandidateCharacterArrayForParty(candidate);
+            let caucus = "";
+            try {
+                caucus = String(
+                    characterArray?.[candidateEnum.caucusParty ?? 0]
+                    ?? candidate?.caucusParty
+                    ?? candidate?.caucus
+                    ?? ""
+                ).trim().charAt(0).toUpperCase();
+            } catch {}
+            if(caucus === "D" || caucus === "R") return caucus;
+            const ownParty = String(candidate?.party ?? "").trim().charAt(0).toUpperCase();
+            return ownParty === "D" || ownParty === "R" ? ownParty : "";
+        };
+
+        const resolveTicketRunningMateName = ticketPartyKey => {
+            const ticket = PRESIDENTIAL_TICKETS.find(entry => entry.party === ticketPartyKey);
+            if(!ticket) return "";
+            let candidateEnum = {};
+            try { candidateEnum = Executive?.enums?.characterArray?.candidate || {}; } catch {}
+            const readName = value => {
+                if(!value) return "";
+                const source = Array.isArray(value) && Array.isArray(value[0]) ? value[0] : value;
+                if(Array.isArray(source)) {
+                    const first = source[candidateEnum.firstName ?? 4];
+                    const last = source[candidateEnum.lastName ?? 5];
+                    return [first, last]
+                        .filter(part => typeof part === "string" && part.trim())
+                        .join(" ")
+                        .trim();
+                }
+                if(typeof source === "object") {
+                    return [source.firstName, source.lastName]
+                        .filter(part => typeof part === "string" && part.trim())
+                        .join(" ")
+                        .trim();
+                }
+                return typeof source === "string" ? source.trim() : "";
+            };
+            for(const name of ticket.runningMates) {
+                let value = null;
+                try { value = readRuntimeValue(name); } catch {}
+                const resolved = readName(value);
+                if(resolved) return resolved;
+            }
+            return "";
+        };
+        votingBooth = createVotingBooth({
+            getCurrentYear: () => Number(
+                typeof currentYear !== "undefined"
+                    ? currentYear
+                    : globalThis.currentYear
+            ),
+            getBallotMeasures: stateId => {
+                try {
+                    const store = ballotMeasuresSubmod?.getStore?.();
+                    const measures = Array.isArray(store?.measures) ? store.measures : [];
+                    const catalogue = Array.isArray(ballotMeasuresSubmod?.catalogue)
+                        ? ballotMeasuresSubmod.catalogue
+                        : [];
+                    const year = Number(
+                        typeof currentYear !== "undefined" ? currentYear : globalThis.currentYear
+                    );
+                    const normalizedState = String(stateId || "").toUpperCase();
+                    return measures
+                        .filter(measure => {
+                            const measureState = String(measure?.stateId || "").toUpperCase();
+                            if(measureState && normalizedState && measureState !== normalizedState) {
+                                return false;
+                            }
+                            const measureYear = Number(measure?.electionYear);
+                            return !Number.isFinite(year)
+                                || !Number.isFinite(measureYear)
+                                || measureYear === year;
+                        })
+                        .map(measure => {
+                            const entry = catalogue.find(
+                                catalogueEntry => catalogueEntry?.id === measure?.catalogueId
+                            ) || {};
+                            return {
+                                title: entry.title || measure?.title || "",
+                                question: entry.question || entry.description || "",
+                                stateId: measure?.stateId || ""
+                            };
+                        })
+                        .filter(measure => measure.title);
+                } catch {
+                    return [];
+                }
+            },
+            resolveCandidateParty: candidate => {
+                try {
+                    const resolved = resolveActualCandidateParty(candidate);
+                    if(resolved === "ID") return { party: "I", caucus: "D" };
+                    if(resolved === "IR") return { party: "I", caucus: "R" };
+                    if(resolved === "I") return { party: "I", caucus: "" };
+                    if(resolved === "D" || resolved === "R") return { party: resolved, caucus: "" };
+                    return null;
+                } catch {
+                    return null;
+                }
+            },
+            isRankedChoiceRace: (electionType, stateId, race) => {
+                try {
+                    return Boolean(isRcvResultsRace(electionType, stateId, race));
+                } catch {
+                    return false;
+                }
+            },
+            resolveTicketParty: candidate => {
+                try {
+                    return resolveNominationTicketParty(candidate);
+                } catch {
+                    return "";
+                }
+            },
+            getRunningMateForTicket: ticketPartyKey => {
+                try {
+                    return resolveTicketRunningMateName(ticketPartyKey);
+                } catch {
+                    return "";
+                }
+            },
+            debugCandidateShape: candidate => {
+                try {
+                    if(votingBoothShapeDumped) return;
+                    votingBoothShapeDumped = true;
+                    const characterArray = getCandidateCharacterArrayForParty(candidate);
+                    let ownKeys = [];
+                    try { ownKeys = Object.keys(candidate || {}).slice(0, 60); } catch {}
+                    fs.writeFileSync(
+                        Executive.mods.getRelativePathPrefix() + path.sep + "voting-booth-debug.json",
+                        JSON.stringify({
+                            isArray: Array.isArray(candidate),
+                            type: typeof candidate,
+                            length: candidate?.length,
+                            ownKeys,
+                            hasExtendedAttribs: Boolean(candidate?.extendedAttribs),
+                            extendedAttribsParty: candidate?.extendedAttribs?.party ?? null,
+                            directParty: candidate?.party ?? null,
+                            caucusParty: candidate?.caucusParty ?? candidate?.caucus ?? null,
+                            idFields: {
+                                id: candidate?.id ?? null,
+                                candidateId: candidate?.candidateId ?? null,
+                                candID: candidate?.candID ?? null
+                            },
+                            foundCharacterArray: Array.isArray(characterArray),
+                            characterArrayLength: characterArray?.length ?? null,
+                            characterArraySlot0: characterArray?.[0] ?? null,
+                            characterArrayParty: characterArray?.[178]?.party ?? null,
+                            resolved: resolveActualCandidateParty(candidate)
+                        }, null, 2),
+                        "utf8"
+                    );
+                } catch {}
+            },
+            playClick: () => {
+                if(typeof playClick === "function") playClick();
+            }
+        });
+        votingBooth.install();
         specialElectionNight = createSpecialElectionNight({
             fs,
             path,
@@ -15601,11 +18525,24 @@
                     ? nationNews
                     : globalThis.nationNews
             ),
-            getHouseDistricts: () => (
-                typeof houseDistricts !== "undefined" && Array.isArray(houseDistricts)
+            getHouseDistricts: stateId => {
+                const rawDistricts = typeof houseDistricts !== "undefined" && Array.isArray(houseDistricts)
                     ? houseDistricts
-                    : globalThis.houseDistricts
-            ),
+                    : globalThis.houseDistricts;
+                if(!stateId) return rawDistricts;
+                const currentDistricts = getHouseDistricts(stateId, true);
+                if(currentDistricts.length) return currentDistricts;
+                const stateCode = String(stateId).toUpperCase();
+                return Array.isArray(rawDistricts)
+                    ? rawDistricts.filter(district => String(
+                        district?.state
+                        ?? district?.stateId
+                        ?? district?.stateID
+                        ?? district?.stateCode
+                        ?? ""
+                    ).toUpperCase() === stateCode)
+                    : [];
+            },
             getStateHouseElectStats: () => (
                 typeof stateHouseElectStats !== "undefined"
                     ? stateHouseElectStats
@@ -15616,40 +18553,22 @@
                     ? stateSenateElectStats
                     : globalThis.stateSenateElectStats
             ),
+            getRuntimeValue: name => readRuntimeValue(name),
+            getCandidateById: id => {
+                try {
+                    const matches = findCandByID([id]);
+                    return Array.isArray(matches) ? matches[0] : matches;
+                } catch {
+                    return null;
+                }
+            },
             playClick: () => {
                 if(typeof playClick === "function") playClick();
             }
         });
         specialElectionNight.install();
         const resolvePrecinctStatewideCandidate = (candidate, race) => {
-            const candidateName = String(getPanelCandidateName(candidate) || "")
-                .replace(/\*+$/, "")
-                .replace(/\s+/g, " ")
-                .trim()
-                .toLowerCase();
-            const candidateId = candidate?.id
-                ?? candidate?.candID
-                ?? candidate?.candidateId
-                ?? candidate?.candidateID;
-            return (race?.cands || []).find(entry => {
-                const entryName = String(getPanelCandidateName(entry) || "")
-                    .replace(/\*+$/, "")
-                    .replace(/\s+/g, " ")
-                    .trim()
-                    .toLowerCase();
-                if(candidateName && entryName) return entryName === candidateName;
-                const entryId = entry?.id
-                    ?? entry?.candID
-                    ?? entry?.candidateId
-                    ?? entry?.candidateID;
-                return (
-                    candidateId !== undefined
-                    && candidateId !== null
-                    && entryId !== undefined
-                    && entryId !== null
-                    && String(candidateId) === String(entryId)
-                );
-            }) || candidate;
+            return resolveElectionCandidate(candidate, race?.cands || []);
         };
         precinctResultsController = createPrecinctResultsController({
             fs,
@@ -15657,6 +18576,8 @@
             getBasePath: () => Executive.mods.getRelativePathPrefix(),
             getCandidateName: candidate => getPanelCandidateName(candidate),
             getCandidateParty: candidate => getCandidateVariantPartyKey(candidate),
+            getCandidateSource: (candidate, race) =>
+                resolvePrecinctStatewideCandidate(candidate, race),
             getCandidateIdeology: candidate => getChanceCandidateIdeology(
                 candidate,
                 getCandidateVariantPartyKey(candidate)
@@ -15667,8 +18588,7 @@
                     race
                 )
             ),
-            createMarginColourResolver: (race, margins) => {
-                const marginScale = createElectionMarginScale(margins);
+            createMarginColourResolver: race => {
                 const baseColourCache = new WeakMap();
                 return (candidate, margin) => {
                     if(!candidate) return stringifyColour(config.partyColours.HouseTie);
@@ -15681,13 +18601,7 @@
                         baseColour = getCandidateColourForRace(statewideCandidate, race);
                         baseColourCache.set(statewideCandidate, baseColour);
                     }
-                    const scaleNum = marginScale(margin);
-                    const inverseLightness = (100 - baseColour.l) * scaleNum;
-                    return stringifyColour({
-                        h: baseColour.h,
-                        s: Math.min(100, baseColour.s * scaleNum),
-                        l: Math.max(100 - inverseLightness, 15)
-                    });
+                    return stringifyColour(getElectionMarginColour(baseColour, margin));
                 };
             },
             getResultsTooltip: () => tooltipDiv,
@@ -15751,14 +18665,21 @@
                     return null;
                 }
             },
+            getCandidateById: id => {
+                try {
+                    const matches = findCandByID([id]);
+                    return Array.isArray(matches) ? matches[0] : matches;
+                } catch {
+                    return null;
+                }
+            },
             precinctResultsController,
             getCandidateName: candidate => getPanelCandidateName(candidate),
             getCandidateParty: candidate => getCandidateVariantPartyKey(candidate),
             getCandidateColour: (candidate, race) => stringifyColour(
                 getCandidateColourForRace(candidate?.source || candidate, race)
             ),
-            createMarginColourResolver: (race, margins) => {
-                const marginScale = createElectionMarginScale(margins);
+            createMarginColourResolver: race => {
                 const baseColourCache = new WeakMap();
                 return (candidate, margin) => {
                     const sourceCandidate = candidate?.source || candidate;
@@ -15768,13 +18689,7 @@
                         baseColour = getCandidateColourForRace(sourceCandidate, race);
                         baseColourCache.set(sourceCandidate, baseColour);
                     }
-                    const scaleNum = marginScale(margin);
-                    const inverseLightness = (100 - baseColour.l) * scaleNum;
-                    return stringifyColour({
-                        h: baseColour.h,
-                        s: Math.min(100, baseColour.s * scaleNum),
-                        l: Math.max(100 - inverseLightness, 15)
-                    });
+                    return stringifyColour(getElectionMarginColour(baseColour, margin));
                 };
             },
             getCandidateProfile: candidate => candidate?.source || candidate,
@@ -15823,27 +18738,9 @@
             },
             getCandidateParty: candidate => {
                 try {
-                    const rawCandidate = findCandByID([candidate?.id])[0];
-                    const wrapped = rawCandidate
-                        ? Executive.data.characters.wrapCharacter(rawCandidate, "candidate")
-                        : null;
-                    const partyName = String(
-                        wrapped?.extendedAttribs?.party || candidate?.party || ""
-                    );
-                    if(partyName === "Independent" || partyName === "I") {
-                        const caucus = String(
-                            wrapped?.caucusParty
-                            || wrapped?.extendedAttribs?.caucusParty
-                            || candidate?.caucusParty
-                            || candidate?.caucus
-                            || ""
-                        ).charAt(0).toUpperCase();
-                        return caucus === "D" || caucus === "R" ? `I${caucus}` : "I";
-                    }
-                    const initial = partyName.charAt(0).toUpperCase();
-                    return initial === "D" || initial === "R" ? initial : "I";
+                    return resolveActualCandidateParty(candidate);
                 } catch {
-                    return candidate?.party || "I";
+                    return null;
                 }
             },
             getCandidateProfile: candidate => {
@@ -15891,13 +18788,17 @@
                 electionType
             );
             if(!countyResult) return null;
+            const countyTurnout = getPrimaryCountyTurnout(
+                stateId,
+                countyName,
+                electionType
+            );
             return {
                 ...countyResult,
-                turnoutVotes: getPrimaryCountyTurnoutVotes(
-                    stateId,
-                    countyName,
-                    electionType
-                )
+                turnoutVotes: countyTurnout.totalVotes,
+                turnoutCurrentVotes: countyTurnout.totalCurrVotes,
+                turnoutReporting: countyTurnout.reporting,
+                turnoutFullyReported: countyTurnout.fullyReported
             };
         });
         createTooltip();
@@ -15910,6 +18811,20 @@
         Executive.functions.registerReplacement("electNightMap", newElectNightMap);
         Executive.functions.registerReplacement("eSimUSCanvas", newSimUSCanvas);
         Executive.functions.registerReplacement("summaryNationMap", newSummaryNationMap);
+        const openVotingBoothForElectionNight = () => {
+            try { votingBooth?.openForElectionNight(); } catch {}
+        };
+        ["electNightPresFunc", "electNightUSSFunc", "electNightUSHFunc", "electNightGovFunc"]
+            .forEach(functionName => {
+                try {
+                    Executive.functions.registerPreHook(
+                        functionName,
+                        openVotingBoothForElectionNight
+                    );
+                } catch {
+                    registerManagedPostHook(functionName, openVotingBoothForElectionNight);
+                }
+            });
         registerManagedPostHook("electNightUSSFunc", createMapChangeObserver("usSenate"));
         registerManagedPostHook("electNightUSSFunc", queueMarginThroughNightChartUpdate);
         registerManagedPostHook("electNightUSHFunc", createMapChangeObserver("usHouse"));

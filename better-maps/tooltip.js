@@ -233,6 +233,9 @@
         if (rowOptions.compactPctDelta === true) {
             badge.classList.add("pct-delta-primary");
         }
+        if (rowOptions.candidateColour) {
+            badge.style.setProperty("background-color", rowOptions.candidateColour, "important");
+        }
         const signClass = roundedDelta > 0 ? "pct-delta-sign-plus" : "pct-delta-sign-minus";
         badge.innerHTML = `<span class="pct-delta-sign ${signClass}" aria-hidden="true"></span><span>${Math.abs(roundedDelta).toFixed(1)}%</span>`;
         cellPct.appendChild(badge);
@@ -782,7 +785,9 @@
     }
     function getCandidateProjectionPartyKey(candidate) {
         const party = normalizeCandidatePartyText(candidate?.party);
-        if (party === "I" || party === "IND" || party === "INDEPENDENT" || party === "INDEPENDENTS") return "I";
+        if (party === "I" || party === "IND" || party === "INDEPENDENT" || party === "INDEPENDENTS") {
+            return getCandidateVisualPartyKey(candidate);
+        }
         if (party === "ID" || party === "I-D") return "ID";
         if (party === "IR" || party === "I-R") return "IR";
         if (party === "D" || party === "DEM" || party === "DEMOCRAT" || party === "DEMOCRATS") return "D";
@@ -799,13 +804,14 @@
         if (isRepublican) return { fill: "#990000", stroke: "#990000" };
         if (isIndependentDemocrat) {
             const colour = stringifyColour(config.partyColours.I.D);
-            return { fill: "#E6F2FF", stroke: colour };
+            return { fill: colour, stroke: colour };
         }
         if (isIndependentRepublican) {
             const colour = stringifyColour(config.partyColours.I.R);
-            return { fill: "#FFF5F5", stroke: colour };
+            return { fill: colour, stroke: colour };
         }
-        return { fill: "#7A7A7A", stroke: "#7A7A7A" };
+        const independentColour = stringifyColour(config.partyColours.I.default);
+        return { fill: independentColour, stroke: independentColour };
     }
     function applyCandidateAvatarPalette(element, candidateOrPalette) {
         if (!element || !candidateOrPalette) return;
@@ -901,19 +907,44 @@
             : null;
         const visited = new Uint8Array(width * height);
         const queue = [];
-        const isBackground = pixel => {
+        const getBackgroundDistance = pixel => {
             const index = pixel * 4;
-            if (data[index + 3] < 24) return true;
-            if (!background) return false;
             const redDistance = data[index] - background.r;
             const greenDistance = data[index + 1] - background.g;
             const blueDistance = data[index + 2] - background.b;
-
             return Math.sqrt(
                 (redDistance * redDistance)
                 + (greenDistance * greenDistance)
                 + (blueDistance * blueDistance)
-            ) <= colourTolerance;
+            );
+        };
+        const bordersDetailedForeground = (pixel, backgroundDistance) => {
+            if (backgroundDistance < colourTolerance * 0.35) return false;
+            const x = pixel % width;
+            const y = Math.floor(pixel / width);
+            const neighbourOffsets = [
+                [-2, 0], [2, 0], [0, -2], [0, 2],
+                [-1, -1], [1, -1], [-1, 1], [1, 1]
+            ];
+            return neighbourOffsets.some(([offsetX, offsetY]) => {
+                const neighbourX = x + offsetX;
+                const neighbourY = y + offsetY;
+                if (neighbourX < 0 || neighbourY < 0 || neighbourX >= width || neighbourY >= height) {
+                    return false;
+                }
+                const neighbourPixel = (neighbourY * width) + neighbourX;
+                const neighbourIndex = neighbourPixel * 4;
+                return data[neighbourIndex + 3] >= 24
+                    && getBackgroundDistance(neighbourPixel) > colourTolerance * 1.4;
+            });
+        };
+        const isBackground = pixel => {
+            const index = pixel * 4;
+            if (data[index + 3] < 24) return true;
+            if (!background) return false;
+            const backgroundDistance = getBackgroundDistance(pixel);
+            return backgroundDistance <= colourTolerance
+                && !bordersDetailedForeground(pixel, backgroundDistance);
         };
         const addPixel = (x, y) => {
             if (x < 0 || y < 0 || x >= width || y >= height) return;
@@ -1387,13 +1418,15 @@
         if (!element) return;
         const candidateColour = options.candidateColour
             || stringifyColour(getCandidateColour(candidate || {}));
-
-        const fill = options.projected === true ? "hsl(0, 0%, 95%)" : candidateColour;
+        const fill = options.projected === true
+            ? "hsl(0, 0%, 95%)"
+            : (options.avatarFill || candidateColour);
         element.classList.toggle("bm-candidate-avatar-projected", options.projected === true);
         element.style.setProperty("--bm-candidate-avatar-fill", fill);
         element.style.setProperty("--bm-candidate-avatar-stroke", candidateColour);
         element.style.backgroundColor = fill;
         element.dataset.candidateColour = candidateColour;
+        element.dataset.avatarFill = fill;
         element.dataset.projected = options.projected === true ? "true" : "false";
     }
     function createCachedCandidateSilhouetteAvatar(cacheKey, candidate, options = {}) {
@@ -1680,6 +1713,7 @@
                 null,
                 {
                     candidateColour: placeholder.dataset.candidateColour,
+                    avatarFill: placeholder.dataset.avatarFill,
                     projected: placeholder.dataset.projected === "true",
                     portraitSrc
                 }
@@ -2139,32 +2173,15 @@
     }
     function getCandidateRowColour(candidate, district) {
         return candidate?.candidateColour
-            || stringifyColour(getCandidateColourForRace(candidate, district));
-    }
-    function applyCandidatePartyBadgeColour(partyBadge, candidate, district) {
-        const raceCandidates = Array.isArray(district?.cands) ? district.cands : [];
-        const candidatePartyKey = getCandidateVariantPartyKey(candidate);
-        const samePartyCandidates = raceCandidates.filter(raceCandidate =>
-            getCandidateVariantPartyKey(raceCandidate) === candidatePartyKey
-        );
-        if (samePartyCandidates.length < 2) return;
-        const candidateColour = getCandidateRowColour(candidate, district);
-        partyBadge.style.setProperty(
-            "background-color",
-            candidateColour,
-            "important"
-        );
+            || stringifyColour(
+                getCandidateColourForRace(candidate, district?.colourRace || district)
+            );
     }
     function applyProjectedCandidateCellColour(candidateCell, candidate, district) {
         if (!candidateCell || !candidate) return;
         const candidateColour = getCandidateRowColour(candidate, district);
-        const visualParty = getCandidateProjectionPartyKey(candidate);
         candidateCell.style.setProperty("background-color", candidateColour, "important");
-        candidateCell.style.setProperty(
-            "color",
-            visualParty === "ID" || visualParty === "IR" ? "#111" : "#fff",
-            "important"
-        );
+        candidateCell.style.setProperty("color", "#fff", "important");
     }
     function createCandidateRow(candidate, district, live, isProjectedWinner, isFirst, rowOptions = {}) {
         const candVotes = live ? candidate.currentVotes : candidate.votes;
@@ -2187,19 +2204,19 @@
         const cellParty = document.createElement("td");
         const divParty = document.createElement("div");
         const partyCode = String(candidate.party || "").toUpperCase();
-        const isIndependentAffiliate = ["I", "ID", "IR", "I-D", "I-R"].includes(partyCode);
+        const candidatePartyKey = getCandidateVariantPartyKey(candidate);
+        const isIndependentAffiliate = candidatePartyKey.startsWith("I");
         divParty.innerText = isIndependentAffiliate ? "I" : partyCode;
-        if (candidate.party === "R") {
+        if (candidatePartyKey === "R") {
             cellParty.classList.add("party-r");
             divParty.classList.add("letter-party-r");
-        } else if (candidate.party === "D") {
+        } else if (candidatePartyKey === "D") {
             cellParty.classList.add("party-d");
             divParty.classList.add("letter-party-d");
         } else if (isIndependentAffiliate) {
             cellParty.classList.add("party-i");
             divParty.classList.add("letter-party-i");
         }
-        applyCandidatePartyBadgeColour(divParty, candidate, district);
         cellParty.appendChild(divParty);
         row.appendChild(cellParty);
         if (rowOptions.showElectoralVotes === true) {
@@ -2235,7 +2252,10 @@
             delta.textContent = ` (${fixedDelta >= 0 ? "+" : ""}${fixedDelta.toFixed(2)})`;
             cellPct.appendChild(delta);
         }
-        updatePctDeltaBadge(cellPct, candidate, pctNumber, rowOptions);
+        updatePctDeltaBadge(cellPct, candidate, pctNumber, {
+            ...rowOptions,
+            candidateColour: getCandidateRowColour(candidate, district)
+        });
         row.appendChild(cellPct);
         if (rowOptions.showDelegates === true) {
             const cellDelegates = document.createElement("td");
@@ -2791,14 +2811,11 @@
         return candidates;
     }
     function getPreviousHouseGeneralElection() {
-        let archive = null;
-        try {
-            archive = (typeof usHouseArchive !== "undefined") ? usHouseArchive : globalThis.usHouseArchive;
-        } catch { }
+        const archive = readRuntimeValue("usHouseArchive");
         const electionYear = getElectionYear();
         return (Array.isArray(archive) ? archive : [])
             .filter(entry =>
-                entry?.category === "general"
+                String(entry?.category || "").toLowerCase() === "general"
                 && (!Number.isFinite(electionYear) || Number(entry.year) < electionYear)
             )
             .sort((a, b) => Number(b.year) - Number(a.year))[0];
@@ -2928,21 +2945,29 @@
         const holder = explicit || records[normalizedDistrict - 1] || null;
         return getOfficeHolderPartyDescriptor(holder);
     }
-    function getExplicitPreviousSeatParty(source) {
+    function getExplicitPreviousSeatParty(source, includeCurrentHolder = true) {
         if (!source || typeof source !== "object") return null;
-        const keys = [
-            "incumbentParty", "incumbParty", "previousParty", "priorParty",
-            "oldParty", "lastParty", "seatParty", "holderParty",
-            "defendingParty", "retiringParty", "openSeatParty"
-        ];
+        const keys = includeCurrentHolder
+            ? [
+                "incumbentParty", "incumbParty", "previousParty", "priorParty",
+                "oldParty", "lastParty", "seatParty", "holderParty",
+                "defendingParty", "retiringParty", "openSeatParty"
+            ]
+            : [
+                "incumbentParty", "incumbParty", "previousParty", "priorParty",
+                "oldParty", "lastParty", "defendingParty", "retiringParty",
+                "openSeatParty"
+            ];
         for (const key of keys) {
             const party = getOfficeHolderPartyDescriptor(source[key]);
             if (party) return party;
         }
-        const holderKeys = [
-            "previousWinner", "previousIncumbent", "incumbent",
-            "officeHolder", "currentHolder", "currentSenator", "senator", "governor"
-        ];
+        const holderKeys = includeCurrentHolder
+            ? [
+                "previousWinner", "previousIncumbent", "incumbent",
+                "officeHolder", "currentHolder", "currentSenator", "senator", "governor"
+            ]
+            : ["previousWinner", "previousIncumbent", "incumbent"];
         for (const key of holderKeys) {
             const party = getOfficeHolderPartyDescriptor(source[key]);
             if (party) return party;
@@ -2965,13 +2990,13 @@
             || normalized === "INDD"
             || normalized.includes("INDEPENDENTDEM")
             || normalized.includes("INDDEM")
-        ) return "D";
+        ) return "ID";
         if (
             normalized === "IR"
             || normalized === "INDR"
             || normalized.includes("INDEPENDENTREP")
             || normalized.includes("INDREP")
-        ) return "R";
+        ) return "IR";
         return normalized ? "I" : null;
     }
     function getHouseFlipPartyKey(candidateOrParty) {
@@ -3036,6 +3061,17 @@
             .slice()
             .sort((a, b) => (Number(b.votes ?? b.totVotes) || 0) - (Number(a.votes ?? a.totVotes) || 0))[0] || null;
     }
+    function isHouseCandidateIncumbent(candidate) {
+        if (!candidate || typeof candidate !== "object") return false;
+        if (candidate.incumbent) return true;
+        const value = candidate.isIncumbent
+            ?? candidate.incumb
+            ?? candidate.extendedAttribs?.incumbent;
+        if (value === true || value === 1) return true;
+        const text = String(value || "").trim().toLowerCase();
+        if (text === "true" || text === "1" || text === "yes" || text === "incumbent") return true;
+        return /\*$/.test(String(candidate.name || candidate.fullName || candidate.displayName || "").trim());
+    }
     function getHouseDistrictsForState(stateId) {
         const stateSummary = resultProxies.usHouse[String(stateId || "").toLowerCase()];
         return Array.isArray(stateSummary?.districts) ? stateSummary.districts : [];
@@ -3060,27 +3096,30 @@
                 ?? district?.seat
                 ?? ""
             ).match(/(\d{1,2})(?!.*\d)/)?.[1]);
-        const previousWinner = getCurrentHouseParty(stateId, districtNumber)
+        const previousWinner = district.cands.find(candidate => isHouseCandidateIncumbent(candidate))
+            || getPreviousHouseDistrictWinner(
+                String(stateId || "").toLowerCase(),
+                districtNumber
+            )
             || getExplicitPreviousSeatParty(district)
-            || getPreviousHouseDistrictWinner(String(stateId || "").toLowerCase(), districtNumber)
-            || district.cands.find(candidate => candidate?.incumbent === true);
+            || getCurrentHouseParty(stateId, districtNumber);
         const winnerParty = getHouseFlipPartyKey(winner);
         const previousParty = getHouseFlipPartyKey(previousWinner);
-        const winnerBlock = getFlipComparisonPartyBlock(winnerParty || winner);
-        const previousBlock = getFlipComparisonPartyBlock(previousParty || previousWinner);
         const sameCandidate = isSameFlipCandidate(winner, previousWinner);
         const computedFlip = Boolean(
             previousWinner
-            && previousBlock
-            && winnerBlock
-            && previousBlock !== winnerBlock
+            && previousParty
+            && winnerParty
+            && previousParty !== winnerParty
             && !sameCandidate
         );
-        const explicitGainFlip = Boolean(
-            district.gain === true
-            && !sameCandidate
-            && (!previousBlock || !winnerBlock || previousBlock !== winnerBlock)
-        );
+        const explicitGainText = String(district.gain ?? "").trim().toLowerCase();
+        const explicitGainFlip = district.gain === true
+            || district.gain === 1
+            || explicitGainText === "true"
+            || explicitGainText === "gain"
+            || explicitGainText === "flip"
+            || explicitGainText === "flipped";
         return {
             flipped: explicitGainFlip || computedFlip,
             winnerParty,
@@ -3100,7 +3139,7 @@
         );
         (districts || []).forEach(district => {
             const incumbent = getHouseSummaryCandidates(district)
-                .find(candidate => candidate?.incumbent === true);
+                .find(candidate => isHouseCandidateIncumbent(candidate));
             if (incumbent) {
                 addWinner(incumbent);
                 return;
@@ -3396,31 +3435,47 @@
             );
     }
     function getHousePrimaryCandidateParty(candidate, fallbackParty = "I") {
-        return getHousePrimaryCandidateAffiliation(candidate, fallbackParty).party;
+        return getPrimaryCandidateAffiliation(candidate, fallbackParty).party;
     }
-    function getHousePrimaryCandidateAffiliation(candidate, fallbackParty = "I") {
-        if (candidate?.party) {
-            return {
-                party: candidate.party,
-                caucus: candidate.caucus || candidate.caucusParty || "",
-                caucusParty: candidate.caucusParty || candidate.caucus || ""
-            };
-        }
+    function getIndependentCaucusFromPartyLabel(value) {
+        const party = normalizeCandidatePartyText(value);
+        if (!party.startsWith("I")) return "";
+        if (party === "ID" || party.includes("DEM") || party.endsWith("D")) return "D";
+        if (party === "IR" || party.includes("REP") || party.endsWith("R")) return "R";
+        return "";
+    }
+    function getPrimaryCandidateAffiliation(candidate, fallbackParty = "I") {
+        const candidateParty = candidate?.party || candidate?.extendedAttribs?.party || "";
+        const candidateCaucus = candidate?.caucusParty
+            || candidate?.caucus
+            || candidate?.extendedAttribs?.caucusParty
+            || candidate?.extendedAttribs?.caucus
+            || getIndependentCaucusFromPartyLabel(candidateParty)
+            || "";
         try {
-            const candArray = findCandByID([candidate.id])[0];
+            const candArray = getCandidateCharacterArray(candidate) || findCandByID([candidate.id])[0];
             const wrappedCandObj = Executive.data.characters.wrapCharacter(candArray, "candidate");
-            const partyName = String(wrappedCandObj?.extendedAttribs?.party || "");
+            const partyName = String(
+                wrappedCandObj?.extendedAttribs?.party
+                || wrappedCandObj?.party
+                || candidateParty
+            );
             const caucusParty = String(
                 wrappedCandObj?.caucusParty
+                || wrappedCandObj?.caucus
                 || wrappedCandObj?.extendedAttribs?.caucusParty
                 || wrappedCandObj?.extendedAttribs?.caucus
+                || candidateCaucus
+                || getIndependentCaucusFromPartyLabel(partyName)
                 || ""
             );
-            if (partyName === "Independent") {
+            if (normalizeCandidatePartyText(partyName).startsWith("I")) {
+                const independentCaucus = caucusParty
+                    || (["D", "R"].includes(fallbackParty) ? fallbackParty : "");
                 return {
                     party: "I",
-                    caucus: caucusParty.substring(0, 1),
-                    caucusParty
+                    caucus: independentCaucus.substring(0, 1),
+                    caucusParty: independentCaucus
                 };
             }
             return {
@@ -3429,12 +3484,24 @@
                 caucusParty: ""
             };
         } catch {
+            if (normalizeCandidatePartyText(candidateParty).startsWith("I")) {
+                const independentCaucus = String(candidateCaucus)
+                    || (["D", "R"].includes(fallbackParty) ? fallbackParty : "");
+                return {
+                    party: "I",
+                    caucus: independentCaucus.substring(0, 1),
+                    caucusParty: independentCaucus
+                };
+            }
             return {
-                party: fallbackParty,
-                caucus: "",
-                caucusParty: ""
+                party: String(candidateParty).substring(0, 1) || fallbackParty,
+                caucus: candidateCaucus,
+                caucusParty: candidateCaucus
             };
         }
+    }
+    function getHousePrimaryCandidateAffiliation(candidate, fallbackParty = "I") {
+        return getPrimaryCandidateAffiliation(candidate, fallbackParty);
     }
     function buildHousePrimaryDisplayDistrict(candidates, party, live, context = {}) {
         let currentVoteTotal = 0;
@@ -3443,13 +3510,7 @@
             const newCandidate = { ...candidate };
             if (context.stateId && !newCandidate.stateId && !newCandidate.state) newCandidate.stateId = context.stateId;
             if (context.district && !newCandidate.district) newCandidate.district = context.district;
-            const affiliation = party
-                ? {
-                    party,
-                    caucus: candidate?.caucus || candidate?.caucusParty || "",
-                    caucusParty: candidate?.caucusParty || candidate?.caucus || ""
-                }
-                : getHousePrimaryCandidateAffiliation(candidate, "I");
+            const affiliation = getPrimaryCandidateAffiliation(candidate, party || "I");
             newCandidate.party = affiliation.party;
             newCandidate.caucus = affiliation.caucus || newCandidate.caucus || "";
             newCandidate.caucusParty = affiliation.caucusParty || newCandidate.caucusParty || "";
@@ -3819,11 +3880,6 @@
     }
     function getActivePresidentialPrimaryParty() {
         installPresidentialPrimaryWatchers();
-        const activeElementParty = getPresidentialPrimaryPartyFromElement(document.activeElement);
-        if (activeElementParty) return rememberPresidentialPrimaryParty(activeElementParty);
-        if (lastPresidentialPrimaryPartyTrusted && lastPresidentialPrimaryParty) {
-            return lastPresidentialPrimaryParty;
-        }
         const demTab = document.getElementById("presElectDemPTab");
         const repTab = document.getElementById("presElectRepPTab");
         const tabLooksOpen = (tab) => {
@@ -3839,15 +3895,20 @@
         const repOpen = tabLooksOpen(repTab);
         if (demOpen && !repOpen) return rememberPresidentialPrimaryParty("D");
         if (repOpen && !demOpen) return rememberPresidentialPrimaryParty("R");
+        const activeElementParty = getPresidentialPrimaryPartyFromElement(document.activeElement);
+        if (activeElementParty) return rememberPresidentialPrimaryParty(activeElementParty);
         const pageState = globalThis.openElectPage3;
         if (typeof pageState === "string") {
             const lowerState = pageState.toLowerCase();
-            if (!lastPresidentialPrimaryPartyTrusted && lowerState.includes("dem")) {
+            if (lowerState.includes("dem") && !lowerState.includes("rep")) {
                 return rememberPresidentialPrimaryParty("D", false);
             }
-            if (!lastPresidentialPrimaryPartyTrusted && lowerState.includes("rep")) {
+            if (lowerState.includes("rep") && !lowerState.includes("dem")) {
                 return rememberPresidentialPrimaryParty("R", false);
             }
+        }
+        if (lastPresidentialPrimaryPartyTrusted && lastPresidentialPrimaryParty) {
+            return lastPresidentialPrimaryParty;
         }
         if (demTab && repTab && !lastPresidentialPrimaryPartyTrusted) {
             return rememberPresidentialPrimaryParty("D", false);
@@ -3884,6 +3945,112 @@
             dummyElem.remove();
             activeMap = previousActiveMap;
         }
+    }
+    function getStatewideElectionNightPrimarySource(electionType) {
+        const sourceName = {
+            president: "electNightP",
+            usSenate: "electNightUSS",
+            governor: "electNightG"
+        }[electionType];
+        const source = sourceName ? readRuntimeValue(sourceName) : null;
+        return Array.isArray(source?.elections) ? source.elections : [];
+    }
+    function getStatewidePrimaryRaceStateCode(race) {
+        const rawState = String(
+            race?.state
+            || race?.stateId
+            || race?.stateID
+            || race?.stateCode
+            || race?.abbr
+            || ""
+        ).trim();
+        if (/^[A-Z]{2}$/i.test(rawState)) return rawState.toUpperCase();
+        const normalizedName = rawState.toLowerCase();
+        const matchingState = Object.entries(Executive?.data?.states || {}).find(([_stateId, state]) =>
+            String(state?.name || "").trim().toLowerCase() === normalizedName
+        );
+        return matchingState ? String(matchingState[0]).toUpperCase() : "";
+    }
+    function getStatewidePrimaryRaceSeatKey(race) {
+        return String(
+            race?.seat
+            ?? race?.senateClass
+            ?? race?.class
+            ?? race?.district
+            ?? race?.districtId
+            ?? ""
+        ).trim().toLowerCase();
+    }
+    function mergeStatewidePrimaryCandidateGroups(groups) {
+        const validGroups = groups.filter(group => Array.isArray(group?.cands));
+        if (!validGroups.length) return null;
+        const candidatesByKey = new Map();
+        validGroups.forEach(group => {
+            group.cands.forEach((candidate, index) => {
+                const id = getCandidatePortraitId(candidate);
+                const name = getCandidatePortraitFullName(candidate);
+                const key = id !== null && id !== undefined
+                    ? `id:${id}`
+                    : `name:${name || index}`;
+                const previous = candidatesByKey.get(key);
+                const previousCurrentVotes = Number(previous?.currentVotes) || 0;
+                const candidateCurrentVotes = Number(candidate?.currentVotes) || 0;
+                const previousVotes = Number(previous?.votes) || 0;
+                const candidateVotes = Number(candidate?.votes) || 0;
+                if (
+                    !previous
+                    || candidateCurrentVotes > previousCurrentVotes
+                    || (
+                        candidateCurrentVotes === previousCurrentVotes
+                        && candidateVotes > previousVotes
+                    )
+                ) {
+                    candidatesByKey.set(key, candidate);
+                }
+            });
+        });
+        const candidates = [...candidatesByKey.values()];
+        const baseGroup = validGroups[0];
+        return {
+            ...baseGroup,
+            cands: candidates,
+            totalVotes: candidates.reduce(
+                (total, candidate) => total + (Number(candidate?.votes) || 0),
+                0
+            ),
+            totalCurrVotes: candidates.reduce(
+                (total, candidate) => total + (Number(candidate?.currentVotes) || 0),
+                0
+            ),
+            pW: validGroups.some(group => isProjectedPrimaryGroup(group))
+        };
+    }
+    function getMergedStatewidePrimaryRace(electionType, stateId, currentRace) {
+        if (!currentRace || Array.isArray(currentRace?.cands)) return currentRace;
+        const normalizedStateId = String(stateId || "").trim().toUpperCase();
+        const currentSeatKey = getStatewidePrimaryRaceSeatKey(currentRace);
+        const matchingRaces = getStatewideElectionNightPrimarySource(electionType).filter(race => {
+            if (getStatewidePrimaryRaceStateCode(race) !== normalizedStateId) return false;
+            if (Array.isArray(race?.cands)) return false;
+            const raceSeatKey = getStatewidePrimaryRaceSeatKey(race);
+            return !currentSeatKey || !raceSeatKey || raceSeatKey === currentSeatKey;
+        });
+        if (!matchingRaces.includes(currentRace)) matchingRaces.unshift(currentRace);
+        const dem = mergeStatewidePrimaryCandidateGroups(
+            matchingRaces.map(race => race?.dem).filter(Boolean)
+        );
+        const rep = mergeStatewidePrimaryCandidateGroups(
+            matchingRaces.map(race => race?.rep).filter(Boolean)
+        );
+        const allCands = mergeStatewidePrimaryCandidateGroups(
+            matchingRaces.map(race => race?.allCands).filter(Boolean)
+        );
+        return {
+            ...currentRace,
+            dem: dem || currentRace?.dem || { cands: [] },
+            rep: rep || currentRace?.rep || { cands: [] },
+            allCands: allCands || currentRace?.allCands
+        };
     }
     function getNonpartisanPrimaryAdvanceCount(electionType, currentDistrict, districtId) {
         const optionNames = [
@@ -4133,18 +4300,20 @@
     function getCountyTurnoutText(county, live) {
         const electionType = tooltipComponents?.properties?.electionType;
         if (!["president", "usSenate", "usHouse", "governor", "mayor"].includes(electionType)) return "";
-        const totalVotes = Number(
-            county?.simulatedPrimaryCounty === true
-                ? (county?.turnoutVotes ?? county?.totalVotes)
-                : county?.totalVotes
-        ) || 0;
-        const currentVotes = Number(
-            county?.simulatedPrimaryCounty === true
-                ? (county?.turnoutVotes ?? county?.totalCurrVotes)
-                : county?.totalCurrVotes
-        ) || 0;
+        const simulatedPrimary = county?.simulatedPrimaryCounty === true;
+        const totalVotes = Number(simulatedPrimary
+            ? (county?.turnoutVotes ?? county?.totalVotes)
+            : county?.totalVotes) || 0;
+        const currentVotes = Number(simulatedPrimary
+            ? (county?.turnoutCurrentVotes ?? county?.totalCurrVotes)
+            : county?.totalCurrVotes) || 0;
         if (totalVotes <= 0) return "";
-        if (live && currentVotes < totalVotes) return "";
+        const fullyReported = simulatedPrimary
+            ? (typeof county?.turnoutFullyReported === "boolean"
+                ? county.turnoutFullyReported
+                : currentVotes >= totalVotes)
+            : currentVotes >= totalVotes;
+        if (live && !fullyReported) return "";
         const stateId = county?.stateId || county?.state || activeMap;
         const registered = getCountyRegisteredVoters(county, stateId);
         const votes = Math.round(live ? currentVotes : totalVotes);
@@ -4207,25 +4376,8 @@
             if (live) return b.currentVotes - a.currentVotes;
             return b.votes - a.votes;
         });
-        let highestTotal = 0;
-        let winner = null;
-        sortedCands.forEach(cand => {
-            const totalVotes = live ? cand.currentVotes : cand.votes;
-            if (totalVotes >= highestTotal) {
-                highestTotal = totalVotes;
-                winner = cand;
-            }
-        });
-        let currentWinner = winner;
-        if (live) {
-            let currentHighestTotal = 0;
-            sortedCands.forEach(cand => {
-                if (cand.currentVotes >= currentHighestTotal) {
-                    currentHighestTotal = cand.currentVotes;
-                currentWinner = cand;
-                }
-            });
-        }
+        const winner = sortedCands[0] || null;
+        const currentWinner = winner;
         const showElectoralVotes = fullyReported
             && !primary
             && !countyView
@@ -4318,6 +4470,7 @@
                 showPctDelta: live,
                 deltaKeyPrefix,
                 compactPctDelta: primary,
+                variantCandidateColours: options.variantCandidateColours === true,
                 showDelegates: options.showDelegates === true,
                 showElectoralVotes,
                 electoralVotes: electoralVoteAllocation.get(cand) || 0
@@ -4480,6 +4633,9 @@
             Math.max(0, Math.floor(Number(options.advancingCount) || 0)),
             sortedCands.length
         );
+        const highestTotal = winner
+            ? (Number(live ? winner.currentVotes : winner.votes) || 0)
+            : 0;
         const markPrimaryWinner = options.markWinner === true && !countyView && winner && highestTotal > 0;
         const markPrimaryAdvancers = options.markAdvancing === true && !countyView && primaryAdvancingCount > 0 && highestTotal > 0;
         const advancingPartyStats = {};
@@ -4638,15 +4794,24 @@
                 const curCaucus = winner.caucus || winner.caucusParty || null;
                 let prevParty = null, prevCaucus = null;
                 let previousWinnerCandidate = null;
-                if (electionType === "governor" || electionType === "usSenate") {
-                    const officeHolder = electionType === "governor"
-                        ? getCurrentGovernorParty(districtId)
-                        : getCurrentSenateParty(districtId);
+                const incumbentCandidate = electionType !== "president"
+                    ? (currentDistrict.cands || []).find(candidate =>
+                        candidate?.incumbent === true
+                        || candidate?.incumbent === 1
+                        || String(candidate?.incumbent || "").toLowerCase() === "true"
+                        || /\*$/.test(String(candidate?.name || candidate?.fullName || "").trim())
+                    )
+                    : null;
+                if (electionType === "governor") {
+                    const officeHolder = getCurrentGovernorParty(districtId);
                     prevParty = officeHolder?.party || null;
                     prevCaucus = officeHolder?.caucus || officeHolder?.caucusParty || null;
                 }
                 if (!prevParty && electionType !== "president") {
-                    const explicitSeatParty = getExplicitPreviousSeatParty(currentDistrict);
+                    const explicitSeatParty = getExplicitPreviousSeatParty(
+                        currentDistrict,
+                        electionType !== "usSenate"
+                    );
                     prevParty = explicitSeatParty?.party || null;
                     prevCaucus = explicitSeatParty?.caucus || explicitSeatParty?.caucusParty || null;
                 }
@@ -4661,21 +4826,21 @@
                     }
                     if (!prevParty && arr && arr.length) {
                         const electionYear = getElectionYear();
-                        const last = arr
+                        const previousGenerals = arr
                             .filter(a => a?.category === "general"
                                 && (!Number.isFinite(electionYear) || Number(a.year) < electionYear))
                             .sort((a, b) => electionType === "usSenate" && Number.isFinite(electionYear)
                                 ? Math.abs(Number(a.year) - (electionYear - 6))
                                     - Math.abs(Number(b.year) - (electionYear - 6))
-                                : Number(b.year) - Number(a.year))[0];
-                        if (last) {
-                            const full = Executive.data.states[districtId]?.name || "";
+                                : Number(b.year) - Number(a.year));
+                        const full = Executive.data.states[districtId]?.name || "";
+                        for (const previousGeneral of previousGenerals) {
                             const prevDist = electionType === "president"
-                                ? (last.exitPoll?.states || last.states || []).find(state =>
+                                ? (previousGeneral.exitPoll?.states || previousGeneral.states || []).find(state =>
                                     String(state?.name || state?.state || "").toLowerCase().trim()
                                     === full.toLowerCase().trim()
                                 )
-                                : (last.elections || []).find(d =>
+                                : (previousGeneral.elections || []).find(d =>
                                     String(d?.district || "").toLowerCase().trim()
                                     === full.toLowerCase().trim()
                                 );
@@ -4690,23 +4855,24 @@
                                 prevParty  = prevCands[0].party || null;
                                 prevCaucus = prevCands[0].caucus || prevCands[0].caucusParty || null;
                             }
+                            if (prevParty) break;
                         }
                     }
                 } catch {}
-                if (!prevParty && electionType !== "president") {
-                    try {
-                        const inc = (currentDistrict.cands || []).find(c => c.incumbent === true);
-                        if (inc) {
-                            previousWinnerCandidate = previousWinnerCandidate || inc;
-                            prevParty  = inc.party || null;
-                            prevCaucus = inc.caucus || inc.caucusParty || null;
-                        }
-                    } catch {}
+                if (!prevParty && incumbentCandidate) {
+                    previousWinnerCandidate = previousWinnerCandidate || incumbentCandidate;
+                    prevParty = incumbentCandidate.party || null;
+                    prevCaucus = incumbentCandidate.caucus || incumbentCandidate.caucusParty || null;
                 }
                 if (!prevParty && electionType === "governor") {
                     const prev = getGovernorPartyFromExecutive(districtId);
                     prevParty  = prev.party;
                     prevCaucus = prev.caucus;
+                }
+                if (!prevParty && electionType === "usSenate") {
+                    const officeHolder = getCurrentSenateParty(districtId);
+                    prevParty = officeHolder?.party || null;
+                    prevCaucus = officeHolder?.caucus || officeHolder?.caucusParty || null;
                 }
                 function mapFullPartyToAcronym(full) {
                     if (!full) return null;
@@ -4757,7 +4923,11 @@
                     ? false
                     : (
                         isSameFlipCandidate(winner, previousWinnerCandidate)
-                        || (winner?.incumbent === true && !previousWinnerCandidate)
+                        || (
+                            winner?.incumbent === true
+                            && !previousWinnerCandidate
+                            && currentPartyBlock === previousPartyBlock
+                        )
                     );
                 const flipped = Boolean(
                     prevParty
@@ -4906,6 +5076,7 @@
                     name: origCounty.name,
                     stateId: activeMap,
                     sourceCounty: origCounty,
+                    colourRace: actualStDistrict,
                     cands: origCounty.cands.map(candObj => {
                         const newCandObj = Object.assign({}, candObj);
                         if (!live || stateFullyReported) {
@@ -4993,6 +5164,13 @@
                 refreshLiveStateResultsForTooltip(electionType, districtId);
                 currentDistrict = currentResults[districtId] || currentDistrict;
             }
+            if (!countyView) {
+                currentDistrict = getMergedStatewidePrimaryRace(
+                    electionType,
+                    districtId,
+                    currentDistrict
+                );
+            }
             if (currentDistrict.dem.cands.length === 0 && currentDistrict.rep.cands.length === 0) {
                 let currentVoteTotal = 0;
                 let finalVoteTotal = 0;
@@ -5059,9 +5237,24 @@
                     && activePresPrimaryParty !== "R";
                 const showRepPrimary = currentDistrict.rep.cands.length !== 0
                     && activePresPrimaryParty !== "D";
-                const showSectionLabels = showDemPrimary && showRepPrimary;
+                const showSectionLabels = electionType === "president"
+                    ? showDemPrimary && showRepPrimary
+                    : showDemPrimary || showRepPrimary;
                 const totalPrimaryTurnoutVotes = [...currentDistrict.dem.cands, ...currentDistrict.rep.cands]
                     .reduce((total, candidate) => total + (Number(candidate.votes) || 0), 0);
+                const currentPrimaryTurnoutVotes = [...currentDistrict.dem.cands, ...currentDistrict.rep.cands]
+                    .reduce(
+                        (total, candidate) => total + (
+                            live
+                                ? (Number(candidate.currentVotes) || 0)
+                                : (Number(candidate.votes) || 0)
+                        ),
+                        0
+                    );
+                if (live && currentPrimaryTurnoutVotes <= 0) {
+                    showNotCountingMessage();
+                    return;
+                }
                 let renderedPrimarySection = false;
                 if (showDemPrimary) {
                     let demCurrentVoteTotal = 0;
@@ -5071,7 +5264,10 @@
                         demCurrentVoteTotal += live ? (Number(candidate.currentVotes) || 0) : (Number(candidate.votes) || 0);
                         demFinalVoteTotal += Number(candidate.votes) || 0;
                         const newCand = Object.assign({}, candidate);
-                        newCand.party = "D";
+                        const affiliation = getPrimaryCandidateAffiliation(candidate, "D");
+                        newCand.party = affiliation.party;
+                        newCand.caucus = affiliation.caucus;
+                        newCand.caucusParty = affiliation.caucusParty;
                         if (electionType === "president") {
                             newCand.delegates = getPresidentialPrimaryCandidateDelegates(candidate, "D", districtId);
                         }
@@ -5082,36 +5278,12 @@
                         totalCurrVotes: demCurrentVoteTotal,
                         cands: newDemCandArray,
                         colourScope: electionType === "president"
-                            ? "presidential-primary:D"
+                            ? `presidential-primary:${String(districtId || "").toLowerCase()}:D`
                             : `statewide-primary:${String(districtId || "").toLowerCase()}:D`,
                         pW: false
                     };
                     const showDemDelegates = electionType === "president"
                         && (!live || (demFinalVoteTotal > 0 && (demCurrentVoteTotal / demFinalVoteTotal) >= 0.999));
-                    if (live && demCurrentVoteTotal === 0) {
-                        if (tooltipComponents.seatGainMessage) {
-                            tooltipComponents.seatGainMessage.style.display = "none";
-                            tooltipComponents.seatGainMessage.innerHTML = "";
-                        }
-                        if (tooltipComponents.projectedWinnerMessage) {
-                            tooltipComponents.projectedWinnerMessage.style.display = "none";
-                            tooltipComponents.projectedWinnerMessage.innerHTML = "";
-                        }
-                        if (tooltipComponents.earlyCallMessage) {
-                        tooltipComponents.earlyCallMessage.style.display = "none";
-                        tooltipComponents.earlyCallMessage.innerHTML = "";
-                        }
-                        if (tooltipComponents.closeCallMessage) {
-                            tooltipComponents.closeCallMessage.style.display = "none";
-                            tooltipComponents.closeCallMessage.innerHTML = "";
-                        }
-                        if (tooltipComponents.turnout) {
-                        tooltipComponents.turnout.style.display = "none";
-                        tooltipComponents.turnout.innerHTML = "";
-                        }
-                            showNotCountingMessage();
-                            return;
-                        }
                     createNewEntries(demFakeDistrict, live, false, true, countyView, {
                         append: renderedPrimarySection,
                         sectionLabel: showSectionLabels ? "DEMOCRATIC PRIMARY" : "",
@@ -5133,7 +5305,10 @@
                         repCurrentVoteTotal += live ? (Number(candidate.currentVotes) || 0) : (Number(candidate.votes) || 0);
                         repFinalVoteTotal += Number(candidate.votes) || 0;
                         const newCand = Object.assign({}, candidate);
-                        newCand.party = "R";
+                        const affiliation = getPrimaryCandidateAffiliation(candidate, "R");
+                        newCand.party = affiliation.party;
+                        newCand.caucus = affiliation.caucus;
+                        newCand.caucusParty = affiliation.caucusParty;
                         if (electionType === "president") {
                             newCand.delegates = getPresidentialPrimaryCandidateDelegates(candidate, "R", districtId);
                         }
@@ -5144,36 +5319,12 @@
                         totalCurrVotes: repCurrentVoteTotal,
                         cands: newRepCandArray,
                         colourScope: electionType === "president"
-                            ? "presidential-primary:R"
+                            ? `presidential-primary:${String(districtId || "").toLowerCase()}:R`
                             : `statewide-primary:${String(districtId || "").toLowerCase()}:R`,
                         pW: false
                     };
                     const showRepDelegates = electionType === "president"
                         && (!live || (repFinalVoteTotal > 0 && (repCurrentVoteTotal / repFinalVoteTotal) >= 0.999));
-                    if (live && repCurrentVoteTotal === 0) {
-                        if (tooltipComponents.seatGainMessage) {
-                            tooltipComponents.seatGainMessage.style.display = "none";
-                            tooltipComponents.seatGainMessage.innerHTML = "";
-                        }
-                        if (tooltipComponents.projectedWinnerMessage) {
-                            tooltipComponents.projectedWinnerMessage.style.display = "none";
-                            tooltipComponents.projectedWinnerMessage.innerHTML = "";
-                        }
-                        if (tooltipComponents.earlyCallMessage) {
-                            tooltipComponents.earlyCallMessage.style.display = "none";
-                            tooltipComponents.earlyCallMessage.innerHTML = "";
-                        }
-                        if (tooltipComponents.closeCallMessage) {
-                            tooltipComponents.closeCallMessage.style.display = "none";
-                            tooltipComponents.closeCallMessage.innerHTML = "";
-                        }
-                        if (tooltipComponents.turnout) {
-                            tooltipComponents.turnout.style.display = "none";
-                            tooltipComponents.turnout.innerHTML = "";
-                        }
-                        showNotCountingMessage();
-                        return;
-                    }
                     createNewEntries(repFakeDistrict, live, false, true, countyView, {
                         append: renderedPrimarySection,
                         sectionLabel: showSectionLabels ? "REPUBLICAN PRIMARY" : "",
@@ -5459,6 +5610,10 @@
         try {
             const data = Executive?.data || {};
             const candidates = [
+                readRuntimeValue("currentYear"),
+                readRuntimeValue("electionYear"),
+                readRuntimeValue("cycleYear"),
+                readRuntimeValue("gameYear"),
                 (typeof currentYear !== "undefined") ? currentYear : null,
                 (typeof electionYear !== "undefined") ? electionYear : null,
                 data.electionYear,
@@ -5475,7 +5630,12 @@
                 const year = Number(candidate);
                 if (Number.isFinite(year) && year > 1700) return year;
             }
-            const pageYearMatch = String(document.body?.innerText || document.body?.textContent || "").match(/\b(20\d{2}|21\d{2})\b/);
+            const pageText = String(document.body?.innerText || document.body?.textContent || "");
+            const pageYearMatch = pageText.match(
+                /\bWeek\s+\d+\s*,\s*((?:1[789]|[2-9]\d)\d{2})\b/i
+            ) || pageText.match(
+                /\b((?:1[789]|[2-9]\d)\d{2})\s+(?:Presidential|General|House|Senate|Gubernatorial)\s+Election\b/i
+            );
             if (pageYearMatch) return Number(pageYearMatch[1]);
         } catch { }
         return null;
@@ -6135,6 +6295,13 @@
         );
     }
     let senateControlBannerPostRenderTimer = null;
+    function isPrimaryControlBannerPage(options = {}) {
+        if (options.isPrimary === true) return true;
+        const svgMap = options.svgMap || null;
+        if (svgMap?.getAttribute?.("data-bm-primary-election") === "true") return true;
+        const pageText = String(document.body?.innerText || "");
+        return /\b(Presidential Primaries|Primary Election|Democratic Primary|Republican Primary|Primary Results|Primar(?:y|ies))\b/i.test(pageText);
+    }
     function updateSenateControlBanner(options = {}) {
         let banner = document.getElementById("bm-senate-banner");
         const removeBanner = () => {
@@ -6142,7 +6309,7 @@
             banner.classList.remove("show", "senate-control-r", "senate-control-d", "senate-control-t");
             banner.innerHTML = "";
         };
-        if (options.live !== true || options.onCountyMap === true) {
+        if (options.live !== true || options.onCountyMap === true || isPrimaryControlBannerPage(options)) {
             removeBanner();
             return;
         }
@@ -6212,7 +6379,12 @@
             banner.classList.remove("show", "house-control-r", "house-control-d", "house-control-t");
             banner.innerHTML = "";
         };
-        if (options.live !== true || options.onCountyMap === true || document.getElementById("bm-house-district-grid")) {
+        if (
+            options.live !== true
+            || options.onCountyMap === true
+            || isPrimaryControlBannerPage(options)
+            || document.getElementById("bm-house-district-grid")
+        ) {
             removeBanner();
             return;
         }
@@ -6315,6 +6487,7 @@
         updatePresidentialWinnerBanner,
         getCandidateBannerPortraitSource,
         getActivePresidentialPrimaryParty,
+        getPrimaryCandidateAffiliation,
         renderPrecinctResultsTooltip,
         hidePrecinctResultsTooltip,
         setPrimaryCountyResultResolver: resolver => {

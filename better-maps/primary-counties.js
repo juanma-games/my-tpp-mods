@@ -106,10 +106,35 @@
         return null;
     };
 
-    const getCandidateKey = candidate => String(
-        candidate?.id ?? candidate?.candidateId ?? candidate?.charID
-        ?? candidate?.name ?? candidate?.lastName ?? "candidate"
-    );
+    const getCandidateKey = candidate => {
+        const identity = candidate?.id
+            ?? candidate?.ID
+            ?? candidate?.candidateId
+            ?? candidate?.candidateID
+            ?? candidate?.candID
+            ?? candidate?.charID
+            ?? candidate?.characterId
+            ?? candidate?.characterID;
+        if(identity !== undefined && identity !== null && String(identity).trim()) {
+            return `id:${String(identity).trim()}`;
+        }
+        const fullName = [
+            candidate?.fullName,
+            candidate?.displayName,
+            [
+                candidate?.firstName ?? candidate?.first,
+                candidate?.lastName ?? candidate?.last
+            ].filter(Boolean).join(" "),
+            candidate?.name,
+            candidate?.lastName,
+            "candidate"
+        ].map(value => String(value || "").trim()).find(Boolean)
+            .replace(/\*+$/, "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+        return `name:${fullName}|party:${getResolvedCandidateParty(candidate)}`;
+    };
 
     const getCandidateName = candidate => String(
         candidate?.name
@@ -295,6 +320,19 @@
     const getResolvedCandidateParty = candidate => {
         const contextualParty = context.getCandidateParty?.(candidate);
         return contextualParty || getCandidateParty(candidate);
+    };
+
+    const getPrimaryCandidateParty = (candidate, primaryParty) => {
+        const contextualParty = context.getCandidateParty?.(candidate);
+        if(contextualParty) return contextualParty;
+        const hasExplicitParty = Boolean(
+            candidate?.party
+            || candidate?.partyKey
+            || candidate?.partyName
+            || candidate?.affiliation
+            || candidate?.extendedAttribs?.party
+        );
+        return hasExplicitParty ? getCandidateParty(candidate) : primaryParty;
     };
 
     const getVisibleVotes = (candidate, stateId, electionType) => {
@@ -834,14 +872,14 @@
         if(!group || !Array.isArray(group.cands) || !group.cands.length) return null;
         const candidates = group.cands.map(candidate => ({
             ...candidate,
-            party: normalizedParty === "N" ? getResolvedCandidateParty(candidate) : normalizedParty,
+            party: getPrimaryCandidateParty(candidate, normalizedParty),
             votes: Math.max(0, Math.round(Number(candidate?.votes) || 0)),
             currentVotes: Math.max(0, Math.round(getVisibleVotes(candidate, stateId, electionType)))
         }));
         const totalVotes = candidates.reduce((sum, candidate) => sum + candidate.votes, 0);
         const totalCurrVotes = candidates.reduce((sum, candidate) => sum + candidate.currentVotes, 0);
         const colourScope = electionType === "president"
-            ? `presidential-primary:${normalizedParty}`
+            ? `presidential-primary:${String(stateId || "").toLowerCase()}:${normalizedParty}`
             : `statewide-primary:${String(stateId || "").toLowerCase()}:${normalizedParty}`;
         return {
             stateId: String(stateId || "").toUpperCase(),
@@ -895,6 +933,10 @@
                 counties,
                 allocations
             );
+        const colourRace = {
+            cands: stateResult.candidates,
+            colourScope: stateResult.colourScope
+        };
         const countyResults = counties.map((county, countyIndex) => {
             const candidates = stateResult.candidates.map(candidate => {
                 const votes = allocations.get(getCandidateKey(candidate))[countyIndex] || 0;
@@ -918,6 +960,7 @@
                 stateId: stateResult.stateId,
                 party: stateResult.party,
                 colourScope: stateResult.colourScope,
+                colourRace,
                 cands: candidates,
                 totalVotes,
                 totalCurrVotes,
@@ -950,16 +993,37 @@
         return result.counties.find(county => county.normalizedName === target) || null;
     };
 
-    const getPrimaryCountyTurnoutVotes = (
+    const getPrimaryCountyTurnout = (
         stateId,
         countyName,
         electionType = context.getElectionType?.()
     ) => {
-        return getAvailablePrimaryParties(stateId, electionType).reduce((total, party) => {
+        const parties = getAvailablePrimaryParties(stateId, electionType);
+        const totals = parties.reduce((result, party) => {
             const county = getPrimaryCountyResult(stateId, party, countyName, electionType);
-            return total + (Number(county?.totalVotes) || 0);
-        }, 0);
+            if(!county) {
+                result.allPartiesAvailable = false;
+                return result;
+            }
+            result.totalVotes += Number(county?.totalVotes) || 0;
+            result.totalCurrVotes += Number(county?.totalCurrVotes) || 0;
+            return result;
+        }, { totalVotes: 0, totalCurrVotes: 0, allPartiesAvailable: true });
+        totals.reporting = totals.totalVotes > 0
+            ? Math.min(1, totals.totalCurrVotes / totals.totalVotes)
+            : 0;
+        totals.fullyReported = parties.length > 0
+            && totals.allPartiesAvailable
+            && totals.totalVotes > 0
+            && totals.totalCurrVotes >= totals.totalVotes;
+        return totals;
     };
+
+    const getPrimaryCountyTurnoutVotes = (
+        stateId,
+        countyName,
+        electionType = context.getElectionType?.()
+    ) => getPrimaryCountyTurnout(stateId, countyName, electionType).totalVotes;
 
     const getAvailablePrimaryParties = (stateId, electionType = context.getElectionType?.()) => {
         const race = getRace(stateId, electionType);
@@ -1010,6 +1074,7 @@
         getPrimaryStateResult,
         buildPrimaryCountyResults,
         getPrimaryCountyResult,
+        getPrimaryCountyTurnout,
         getPrimaryCountyTurnoutVotes,
         buildGeneralCountyResults,
         getAvailablePrimaryParties,
