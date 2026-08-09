@@ -537,10 +537,7 @@ const createVotingBooth = (options = {}) => {
             || "Unnamed candidate";
     };
 
-    const getPartyLabel = (candidate, fallbackPartyKey = "", dumpShape = false) => {
-        if(dumpShape) {
-            try { options.debugCandidateShape?.(candidate); } catch {}
-        }
+    const getPartyLabel = (candidate, fallbackPartyKey = "") => {
         const fallback = String(fallbackPartyKey || "").trim().toUpperCase();
         let party = "";
         let caucus = "";
@@ -796,7 +793,7 @@ const createVotingBooth = (options = {}) => {
             choices: candidates.map((candidate, index) => ({
                 id: `${key}:${index}`,
                 name: getCandidateName(candidate),
-                party: getPartyLabel(candidate, primary.groupParty, index === 0),
+                party: getPartyLabel(candidate, primary.groupParty),
                 incumbent: isIncumbent(candidate),
                 runningMate: contestOptions.withRunningMate
                     ? getRunningMateName(

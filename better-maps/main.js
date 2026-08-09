@@ -126,7 +126,6 @@
     let pollAverageActiveGraph = null;
     let specialElectionNight = null;
     let votingBooth = null;
-    let votingBoothShapeDumped = false;
     let stateCountyZoomController = null;
     const marginThroughNightHistories = new Map();
     let marginThroughNightTooltip = null;
@@ -18447,39 +18446,6 @@
                 } catch {
                     return "";
                 }
-            },
-            debugCandidateShape: candidate => {
-                try {
-                    if(votingBoothShapeDumped) return;
-                    votingBoothShapeDumped = true;
-                    const characterArray = getCandidateCharacterArrayForParty(candidate);
-                    let ownKeys = [];
-                    try { ownKeys = Object.keys(candidate || {}).slice(0, 60); } catch {}
-                    fs.writeFileSync(
-                        Executive.mods.getRelativePathPrefix() + path.sep + "voting-booth-debug.json",
-                        JSON.stringify({
-                            isArray: Array.isArray(candidate),
-                            type: typeof candidate,
-                            length: candidate?.length,
-                            ownKeys,
-                            hasExtendedAttribs: Boolean(candidate?.extendedAttribs),
-                            extendedAttribsParty: candidate?.extendedAttribs?.party ?? null,
-                            directParty: candidate?.party ?? null,
-                            caucusParty: candidate?.caucusParty ?? candidate?.caucus ?? null,
-                            idFields: {
-                                id: candidate?.id ?? null,
-                                candidateId: candidate?.candidateId ?? null,
-                                candID: candidate?.candID ?? null
-                            },
-                            foundCharacterArray: Array.isArray(characterArray),
-                            characterArrayLength: characterArray?.length ?? null,
-                            characterArraySlot0: characterArray?.[0] ?? null,
-                            characterArrayParty: characterArray?.[178]?.party ?? null,
-                            resolved: resolveActualCandidateParty(candidate)
-                        }, null, 2),
-                        "utf8"
-                    );
-                } catch {}
             },
             playClick: () => {
                 if(typeof playClick === "function") playClick();
